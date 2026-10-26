@@ -12,6 +12,9 @@ A set of **Claude Code skills** for reverse-engineering **Windows apps, Android 
 | [`reverse-mobile-app`](skills/reverse-mobile-app/SKILL.md) | Android apps (APK) running in an emulator | REA JADX + mitm/Frida + rebuild client |
 | [`reverse-web-app`](skills/reverse-web-app/SKILL.md) | Web app / site API | REA web-bundle / HAR / browser scenario + rebuild client |
 
+Starter template:
+- [`templates/cli-skeleton`](templates/cli-skeleton) — a ready-to-adapt Python CLI skeleton (client / signer / crypto / captcha / cli) implementing the deliverable every skill targets. Copy it and fill in what you reversed instead of starting from scratch.
+
 Shared documentation:
 - [`docs/rea-setup.md`](docs/rea-setup.md) — install & configure REA + its providers (Ghidra, JADX, JDK), portable.
 - [`docs/captcha-solvers.md`](docs/captcha-solvers.md) — solve captchas via a service (NextCaptcha / 2captcha / CapSolver / EzCaptcha / Capzy).

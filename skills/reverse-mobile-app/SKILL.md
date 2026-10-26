@@ -102,7 +102,7 @@ Combine the **captured traffic** (which headers exist, sample values) + the **co
 6. Encrypted body/response (AES common): find the key+IV+mode → decrypt a captured response into valid JSON with `pycryptodome` to verify. Protobuf → get the `.proto` or reconstruct the field numbers.
 
 ### 5. Build the Python CLI (final deliverable)
-The deliverable is **1 stable CLI**, no DB/no web UI. Compact structure:
+The deliverable is **1 stable CLI**, no DB/no web UI. Start from the ready skeleton [templates/cli-skeleton](https://github.com/QuocHuy03/rea-reverse-skills/tree/main/templates/cli-skeleton) instead of scratch. Compact structure:
 ```
 <app>/                 # drop the package prefix: com.company.app → app
   client.py            # Client(): login, export/restore session, one get_*/do_* method per endpoint

@@ -60,7 +60,7 @@ rea trace-web-module-imports / trace-web-source-location ...   # follow imports 
 - Cookie/session flow: reproduce the exact chain (GET the page → set-cookie → login → token) — skip a step and you get blocked.
 
 ### 4. Build the Python CLI (the final deliverable)
-The deliverable is **a single stable CLI**, no DB / no web UI:
+The deliverable is **a single stable CLI**, no DB / no web UI. Start from the ready skeleton [templates/cli-skeleton](https://github.com/QuocHuy03/rea-reverse-skills/tree/main/templates/cli-skeleton) instead of scratch:
 ```
 <site>/
   client.py            # Client(): login (user/pass or OTP/email), export/restore session (cookie+token), one get_*/do_* method per endpoint

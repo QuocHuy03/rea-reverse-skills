@@ -98,7 +98,7 @@ A desktop app may speak HTTP(S), WebSocket, or its own binary protocol:
 Same as mobile: combine the **captured traffic** + the **code from REA**. Find the function that generates the signing header (`sign`/`token`/`nonce`/`ts`), the algorithm (HMAC/AES/MD5/SHA), and the key (string literal from `inspect-managed-members` for .NET / `search` for native / grep for Electron). **Hard to read statically → Frida hook the signing function to print the input-before-hash + output**, and compare against a real request. **ALWAYS verify**: reimplement in Python, compute the sign for a captured request → it must match exactly before you make real calls. Encrypted body → decrypt a captured response into valid JSON to verify the key/IV/mode.
 
 ## Build the Python CLI (final deliverable)
-The deliverable is **1 stable CLI**, no DB/no web UI:
+The deliverable is **1 stable CLI**, no DB/no web UI. Start from the ready skeleton [templates/cli-skeleton](https://github.com/QuocHuy03/rea-reverse-skills/tree/main/templates/cli-skeleton) instead of scratch:
 ```
 <app>/
   client.py            # Client(): login, export/restore session, one get_*/do_* method per endpoint
