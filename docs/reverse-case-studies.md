@@ -1,138 +1,138 @@
-# Case studies — source reverse thật & pattern chắt lọc
+# Case studies — real reverse-engineering sources & distilled patterns
 
-Các project mã nguồn mở dưới đây là **client dựng lại từ việc reverse** API đóng của app/site thật. Học ở đây là **KỸ THUẬT** (cách ký request, device fingerprint, anti-bot, protobuf, websocket), không phải để "chạy được hôm nay" — phần lớn pin theo version app và vỡ mỗi lần app cập nhật; vài cái đã archive hoặc bị DMCA. Dùng để hiểu *cách người ta làm*, rồi áp vào mục tiêu của bạn.
+The open-source projects below are **clients reimplemented from reverse-engineering** the closed APIs of real apps/sites. What you learn here is the **TECHNIQUE** (how requests are signed, device fingerprinting, anti-bot, protobuf, websocket), not "something that works today" — most are pinned to a specific app version and break every time the app updates; a few are archived or DMCA'd. Use them to understand *how people did it*, then apply that to your own target.
 
-> ⚠️ Pháp lý: chỉ tham khảo cho mục đích hợp pháp (interoperability, nghiên cứu được uỷ quyền, app của chính bạn). Nhiều repo vi phạm ToS của dịch vụ gốc — biết để tránh, không phải để copy mù.
+> ⚠️ Legal: for reference only, for lawful purposes (interoperability, authorized research, your own app). Many repos violate the original service's ToS — know them so you can avoid them, not to copy blindly.
 
 ---
 
 ## 1. Social / mobile private-API clients
 
-- [davidteather/TikTok-Api](https://github.com/davidteather/TikTok-Api) — wrapper web TikTok. **Kỹ thuật:** "mượn signer" — chạy browser thật (Playwright) để chính JS của TikTok ký (X-Bogus/msToken) thay vì tự tính.
-- [is-L7N/SignerPy](https://github.com/is-L7N/SignerPy) — TikTok mobile signer thuần Python. **Kỹ thuật:** tái tạo X-Gorgon/X-Ladon/X-Argus (HMAC/hash obfuscate trên request + timestamp) bằng Python.
-- [scrapguru/tiktok-argus-androidemu](https://github.com/scrapguru/tiktok-argus-androidemu) — TikTok mobile signing. **Kỹ thuật:** **emulate native `libmetasec_ov.so`** (AndroidNativeEmu) để tính X-Argus/X-Ladon/X-Gorgon — khỏi reverse thuật toán bằng tay (pin theo version).
-- [carcabot/tiktok-xgnarly-decoded](https://github.com/carcabot/tiktok-xgnarly-decoded) — TikTok web signing. **Kỹ thuật:** reimplement X-Gnarly/X-Bogus (deobfuscate từ bundle web).
-- [subzeroid/instagrapi](https://github.com/subzeroid/instagrapi) — Instagram private API (duy trì; trước là adw0rd). **Kỹ thuật:** giả lập app mobile — device fingerprint/UUID bền, `signed_body`, đổi endpoint Web↔Mobile né limit, resolver challenge/2FA, export/restore session.
-- [ping/instagram_private_api](https://github.com/ping/instagram_private_api) — IG app+web cũ. **Kỹ thuật:** `signed_body`, `rank_token`, seed device (kinh điển, hơi cũ).
-- [instaloader/instaloader](https://github.com/instaloader/instaloader) — downloader IG (active). **Kỹ thuật:** reuse cookie-session lưu đĩa + GraphQL `query_hash`, xử rate-limit.
-- [d60/twikit](https://github.com/d60/twikit) — Twitter/X không cần API key. **Kỹ thuật:** lấy guest-token + GraphQL nội bộ qua cookie; export session.
-- [JustAnotherArchivist/snscrape](https://github.com/JustAnotherArchivist/snscrape) — scraper Twitter+. **Kỹ thuật:** guest-token → JSON endpoint ngầm.
-- [dolfies/discord.py-self](https://github.com/dolfies/discord.py-self) — Discord self-bot. **Kỹ thuật:** giả client chính chủ — `x-super-properties`, spoof build-number, tránh detect automation. (Vi phạm ToS.)
-- [dolfies/discord-protos](https://github.com/dolfies/discord-protos) — **Kỹ thuật:** reverse schema **protobuf** user-settings của Discord.
-- [tomquirk/linkedin-api](https://github.com/tomquirk/linkedin-api) — LinkedIn. **Kỹ thuật:** login lấy cookie → gọi endpoint **Voyager** JSON nội bộ (lấy từ data nhúng trong trang). (Vi phạm ToS.)
-- [carpedm20/fbchat](https://github.com/carpedm20/fbchat) — Messenger (không duy trì). **Kỹ thuật:** login như browser (cookie) + mimic traffic MQTT; fork cookie-based thực tế hơn.
-- [madsmtm/sensebook](https://github.com/madsmtm/sensebook) — **doc** wire-protocol/MQTT của FB/Messenger (dùng như "spec").
+- [davidteather/TikTok-Api](https://github.com/davidteather/TikTok-Api) — TikTok web wrapper. **technique:** "borrow the signer" — run a real browser (Playwright) so TikTok's own JS signs (X-Bogus/msToken) instead of computing it yourself.
+- [is-L7N/SignerPy](https://github.com/is-L7N/SignerPy) — pure-Python TikTok mobile signer. **technique:** reproduce X-Gorgon/X-Ladon/X-Argus (HMAC/obfuscated hash over request + timestamp) in Python.
+- [scrapguru/tiktok-argus-androidemu](https://github.com/scrapguru/tiktok-argus-androidemu) — TikTok mobile signing. **technique:** **emulate the native `libmetasec_ov.so`** (AndroidNativeEmu) to compute X-Argus/X-Ladon/X-Gorgon — no need to reverse the algorithm by hand (pinned to a version).
+- [carcabot/tiktok-xgnarly-decoded](https://github.com/carcabot/tiktok-xgnarly-decoded) — TikTok web signing. **technique:** reimplement X-Gnarly/X-Bogus (deobfuscated from the web bundle).
+- [subzeroid/instagrapi](https://github.com/subzeroid/instagrapi) — Instagram private API (maintained; formerly adw0rd). **technique:** emulate the mobile app — durable device fingerprint/UUID, `signed_body`, switch Web↔Mobile endpoints to dodge limits, challenge/2FA resolver, export/restore session.
+- [ping/instagram_private_api](https://github.com/ping/instagram_private_api) — old IG app+web. **technique:** `signed_body`, `rank_token`, device seed (classic, somewhat dated).
+- [instaloader/instaloader](https://github.com/instaloader/instaloader) — IG downloader (active). **technique:** reuse a disk-persisted cookie-session + GraphQL `query_hash`, handle rate-limiting.
+- [d60/twikit](https://github.com/d60/twikit) — Twitter/X without an API key. **technique:** get a guest-token + internal GraphQL via cookie; export session.
+- [JustAnotherArchivist/snscrape](https://github.com/JustAnotherArchivist/snscrape) — Twitter+ scraper. **technique:** guest-token → hidden JSON endpoint.
+- [dolfies/discord.py-self](https://github.com/dolfies/discord.py-self) — Discord self-bot. **technique:** impersonate the official client — `x-super-properties`, spoofed build-number, evade automation detection. (Violates ToS.)
+- [dolfies/discord-protos](https://github.com/dolfies/discord-protos) — **technique:** reverse the **protobuf** schema of Discord's user-settings.
+- [tomquirk/linkedin-api](https://github.com/tomquirk/linkedin-api) — LinkedIn. **technique:** log in for a cookie → call the internal **Voyager** JSON endpoints (taken from data embedded in the page). (Violates ToS.)
+- [carpedm20/fbchat](https://github.com/carpedm20/fbchat) — Messenger (unmaintained). **technique:** log in like a browser (cookie) + mimic MQTT traffic; cookie-based forks are more realistic.
+- [madsmtm/sensebook](https://github.com/madsmtm/sensebook) — **doc** of the FB/Messenger MQTT wire-protocol (used as a "spec").
 
-Threads (Meta) — unofficial, vỡ nhanh: [Danie1/threads-api](https://github.com/Danie1/threads-api) (archived; mượn auth instagrapi), [dmytrostriletskyi/threads-net](https://github.com/dmytrostriletskyi/threads-net) (LSD token web+mobile), [m1guelpf/threads-re](https://github.com/m1guelpf/threads-re) (notes-as-code).
+Threads (Meta) — unofficial, break quickly: [Danie1/threads-api](https://github.com/Danie1/threads-api) (archived; borrows instagrapi auth), [dmytrostriletskyi/threads-net](https://github.com/dmytrostriletskyi/threads-net) (web+mobile LSD token), [m1guelpf/threads-re](https://github.com/m1guelpf/threads-re) (notes-as-code).
 
 ## 2. Music / streaming
-- [librespot-org/librespot](https://github.com/librespot-org/librespot) — Spotify Connect (Rust, canonical). **Kỹ thuật:** reimplement full protocol — handshake access-point, Mercury, trao đổi audio-key, giải mã OGG/Vorbis.
-- [devgianlu/go-librespot](https://github.com/devgianlu/go-librespot) — Spotify Connect (Go, full). **Kỹ thuật:** Login5 + dealer **WebSocket** + protobuf (schema trong `proto/`).
-- [hrkfdn/ncspot](https://github.com/hrkfdn/ncspot) — client ncurses dùng librespot (ví dụ consume lib reversed).
+- [librespot-org/librespot](https://github.com/librespot-org/librespot) — Spotify Connect (Rust, canonical). **technique:** reimplement the full protocol — access-point handshake, Mercury, audio-key exchange, OGG/Vorbis decryption.
+- [devgianlu/go-librespot](https://github.com/devgianlu/go-librespot) — Spotify Connect (Go, full). **technique:** Login5 + dealer **WebSocket** + protobuf (schema in `proto/`).
+- [hrkfdn/ncspot](https://github.com/hrkfdn/ncspot) — ncurses client using librespot (an example of consuming a reversed lib).
 
 ## 3. Google / ecosystem auth
-- [simon-weber/gpsoauth](https://github.com/simon-weber/gpsoauth) — Google Play Services OAuth (Python). **Kỹ thuật:** luồng **master-token** của Android — tái tạo chữ ký RSA `EncryptedPasswd`, rồi master-token → per-service OAuth token. Có port C#/Java/Ruby/C++.
+- [simon-weber/gpsoauth](https://github.com/simon-weber/gpsoauth) — Google Play Services OAuth (Python). **technique:** Android's **master-token** flow — reproduce the `EncryptedPasswd` RSA signature, then master-token → per-service OAuth token. Has C#/Java/Ruby/C++ ports.
 
 ## 4. Unity / IL2CPP
-- [vfsfitvnm/frida-il2cpp-bridge](https://github.com/vfsfitvnm/frida-il2cpp-bridge) — module Frida cho Unity IL2CPP (active). **Kỹ thuật:** instrument runtime — dump/trace/hijack class & method IL2CPP trên process sống, **không cần** `global-metadata.dat`.
-- [Perfare/Il2CppDumper](https://github.com/Perfare/Il2CppDumper) — dumper IL2CPP tĩnh. **Kỹ thuật:** parse binary + `global-metadata.dat` ra cấu trúc C# + script cho IDA/Ghidra (đối trọng tĩnh của bridge).
+- [vfsfitvnm/frida-il2cpp-bridge](https://github.com/vfsfitvnm/frida-il2cpp-bridge) — Frida module for Unity IL2CPP (active). **technique:** instrument the runtime — dump/trace/hijack IL2CPP classes & methods in a live process, **without** `global-metadata.dat`.
+- [Perfare/Il2CppDumper](https://github.com/Perfare/Il2CppDumper) — static IL2CPP dumper. **technique:** parse the binary + `global-metadata.dat` into C# structures + scripts for IDA/Ghidra (the static counterpart of the bridge).
 
 ## 5. Request-signing / device protocol
-- [rytilahti/python-miio](https://github.com/rytilahti/python-miio) — Xiaomi miIO/MIoT. **Kỹ thuật:** reverse gói nhị phân có **token** per-device + handshake AES; `miiocli cloud` rút token từ Mi Home.
+- [rytilahti/python-miio](https://github.com/rytilahti/python-miio) — Xiaomi miIO/MIoT. **technique:** reverse the binary packets carrying a per-device **token** + an AES handshake; `miiocli cloud` extracts the token from Mi Home.
 
-## 6. Anti-bot token gen (mong manh — verify trước khi tin)
-- [xvertile/akamai-bmp-generator](https://github.com/xvertile/akamai-bmp-generator) — sinh sensor data Akamai **BMP** (mobile). **Kỹ thuật:** giả payload telemetry device/behavior SDK Akamai gửi. (Pin version, vỡ thường xuyên.)
-- [NotAnAPI/SensorData.Decryptor](https://github.com/NotAnAPI/SensorData.Decryptor) — **giải mã** sensor-data Akamai 2.x. **Kỹ thuật:** suy key mã hoá từ cookie `bm_sz` để *hiểu* payload (không chỉ giả).
+## 6. Anti-bot token generation (fragile — verify before trusting)
+- [xvertile/akamai-bmp-generator](https://github.com/xvertile/akamai-bmp-generator) — generate Akamai **BMP** sensor data (mobile). **technique:** forge the device/behavior telemetry payload the Akamai SDK sends. (Version-pinned, breaks often.)
+- [NotAnAPI/SensorData.Decryptor](https://github.com/NotAnAPI/SensorData.Decryptor) — **decrypt** Akamai 2.x sensor-data. **technique:** derive the encryption key from the `bm_sz` cookie to *understand* the payload (not just forge it).
 
-> Nhóm này DMCA/bỏ hoang nhiều nhất — xem để hiểu kỹ thuật, đừng phụ thuộc.
+> This group has the most DMCAs/abandonment — study it to understand the technique, don't depend on it.
 
 ## 7. WebSocket / realtime
-- [zerodytrash/TikTok-Live-Connector](https://github.com/zerodytrash/TikTok-Live-Connector) — TikTok LIVE (Node). **Kỹ thuật:** nối WebCast qua WebSocket, decode **protobuf** gift/comment.
-- [isaackogan/TikTokLive](https://github.com/isaackogan/TikTokLive) — port Python. **Kỹ thuật:** xử **URL WebSocket có ký + hết hạn 30s**, nén payload, decode protobuf.
-- [tulir/whatsmeow](https://github.com/tulir/whatsmeow) — WhatsApp multi-device (Go). **Kỹ thuật:** reimplement full — handshake **Noise protocol**, protobuf trên WebSocket, E2E Signal.
-- [WhiskeySockets/Baileys](https://github.com/WhiskeySockets/Baileys) — WhatsApp Web (TS, không browser). **Kỹ thuật:** WebSocket + Noise + protobuf/binary-node (bản tham chiếu nhiều project port theo).
-- [sigalor/whatsapp-web-reveng](https://github.com/sigalor/whatsapp-web-reveng) — write-up reverse WA Web (QR pairing, key exchange, format message).
-- [oxidezap/whatspec](https://github.com/oxidezap/whatspec) — trích protocol từ bundle JS WA Web ra IR (protobuf/IQ/GraphQL). **Kỹ thuật:** reverse **cả spec** thay vì từng endpoint.
+- [zerodytrash/TikTok-Live-Connector](https://github.com/zerodytrash/TikTok-Live-Connector) — TikTok LIVE (Node). **technique:** connect WebCast over WebSocket, decode **protobuf** gifts/comments.
+- [isaackogan/TikTokLive](https://github.com/isaackogan/TikTokLive) — Python port. **technique:** handle the **signed WebSocket URL that expires in 30s**, payload compression, protobuf decode.
+- [tulir/whatsmeow](https://github.com/tulir/whatsmeow) — WhatsApp multi-device (Go). **technique:** full reimplementation — **Noise protocol** handshake, protobuf over WebSocket, Signal E2E.
+- [WhiskeySockets/Baileys](https://github.com/WhiskeySockets/Baileys) — WhatsApp Web (TS, no browser). **technique:** WebSocket + Noise + protobuf/binary-node (the reference many ports follow).
+- [sigalor/whatsapp-web-reveng](https://github.com/sigalor/whatsapp-web-reveng) — write-up reversing WA Web (QR pairing, key exchange, message format).
+- [oxidezap/whatspec](https://github.com/oxidezap/whatspec) — extract the protocol from the WA Web JS bundle into an IR (protobuf/IQ/GraphQL). **technique:** reverse **the whole spec** instead of endpoint by endpoint.
 
-## TLS / fingerprint primitives (dùng xuyên suốt)
-- [lexiforest/curl_cffi](https://github.com/lexiforest/curl_cffi) — impersonate TLS/JA3 + HTTP/2(3) 1 dòng `impersonate=`.
-- [bogdanfinn/tls-client](https://github.com/bogdanfinn/tls-client) — client Go impersonate fingerprint (nguồn nhiều profile dùng chung).
+## TLS / fingerprint primitives (used throughout)
+- [lexiforest/curl_cffi](https://github.com/lexiforest/curl_cffi) — impersonate TLS/JA3 + HTTP/2(3) in one line via `impersonate=`.
+- [bogdanfinn/tls-client](https://github.com/bogdanfinn/tls-client) — Go client that impersonates fingerprints (source of many shared profiles).
 
 ---
 
-## 🧙 Kỹ thuật nặng ("pháp sư")
+## 🧙 Heavy techniques ("the wizardry")
 
-### A. Emulate native `.so` để tái tạo chữ ký — đòn mạnh nhất cho mobile
-Thay vì reverse thuật toán ký trong `.so` (thường obfuscate nặng), **nạp thẳng `.so` vào emulator rồi gọi hàm ký như một oracle** — không cần điện thoại, không cần hiểu thuật toán, không cần phá obfuscate.
-- [zhkl0228/unidbg](https://github.com/zhkl0228/unidbg) — emulate `.so` Android/iOS ARM32/64 trong **JVM** + API JNI đầy đủ. **Cách làm:** `AndroidEmulator` → `VM.loadLibrary(libxxx.so)` → `callJNI_OnLoad` (đăng ký native) → resolve hàm ký (theo tên JNI/symbol) → dựng tham số Java trong VM giả → gọi, đọc String/byte[] trả về. Bọc trong HTTP endpoint (Spring Boot) → client Python xin chữ ký on-demand. **Treat `.so` như hộp đen oracle.**
-- [qilingframework/qiling](https://github.com/qilingframework/qiling) — emulate binary bằng Python (trên Unicorn) + ngữ cảnh OS (loader ELF/PE/Mach-O, syscall). Dùng khi hàm ký cần syscall/filesystem mà unidbg không mô hình gọn.
-- [unicorn-engine/unicorn](https://github.com/unicorn-engine/unicorn) — CPU emulator đa kiến trúc (fallback thấp nhất): map bytes của 1 hàm, set register, `emu_start` qua đúng khoảng lệnh — khi muốn chạy 1 hàm không cần scaffolding JNI/OS.
-- [frida/frida](https://github.com/frida/frida) — **native RPC** (thay cho emulate): attach app sống, `rpc.exports` + `NativeFunction` expose hàm ký ra host → app thành "server ký". Device vẫn trong vòng lặp nhưng khỏi reimplement.
+### A. Emulate the native `.so` to reproduce signatures — the strongest move for mobile
+Instead of reversing the signing algorithm inside the `.so` (usually heavily obfuscated), **load the `.so` straight into an emulator and call the signing function like an oracle** — no phone, no understanding the algorithm, no defeating the obfuscation.
+- [zhkl0228/unidbg](https://github.com/zhkl0228/unidbg) — emulate Android/iOS ARM32/64 `.so` inside the **JVM** + a full JNI API. **How:** `AndroidEmulator` → `VM.loadLibrary(libxxx.so)` → `callJNI_OnLoad` (register natives) → resolve the signing function (by JNI name/symbol) → build the Java arguments in the fake VM → call it, read back the returned String/byte[]. Wrap it in an HTTP endpoint (Spring Boot) → the Python client requests signatures on-demand. **Treat the `.so` as a black-box oracle.**
+- [qilingframework/qiling](https://github.com/qilingframework/qiling) — emulate binaries in Python (on top of Unicorn) + OS context (ELF/PE/Mach-O loader, syscalls). Use it when the signing function needs syscalls/filesystem that unidbg doesn't model cleanly.
+- [unicorn-engine/unicorn](https://github.com/unicorn-engine/unicorn) — multi-architecture CPU emulator (the lowest-level fallback): map a function's bytes, set registers, `emu_start` over the exact instruction range — when you want to run a single function without JNI/OS scaffolding.
+- [frida/frida](https://github.com/frida/frida) — **native RPC** (instead of emulation): attach to the live app, `rpc.exports` + `NativeFunction` to expose the signing function to the host → the app becomes a "signing server." The device stays in the loop but you avoid reimplementing anything.
 
-### B. Unity / IL2CPP sâu
-- [Perfare/Il2CppDumper](https://github.com/Perfare/Il2CppDumper) — khôi phục metadata C# từ `libil2cpp.so` + `global-metadata.dat`, xuất dummy DLL + script IDA/Ghidra.
-- [Perfare/Zygisk-Il2CppDumper](https://github.com/Perfare/Zygisk-Il2CppDumper) — dump runtime (Zygisk) khi game mã hoá `global-metadata.dat` trên đĩa — dump sau khi game giải mã trong RAM.
-- [vfsfitvnm/frida-il2cpp-bridge](https://github.com/vfsfitvnm/frida-il2cpp-bridge) — interop runtime IL2CPP qua Frida, không cần metadata file.
-- [djkaty/Il2CppInspector](https://github.com/djkaty/Il2CppInspector) — thay thế/bổ sung Il2CppDumper, phủ nhiều version metadata hơn, tích hợp Ghidra sạch.
+### B. Deep Unity / IL2CPP
+- [Perfare/Il2CppDumper](https://github.com/Perfare/Il2CppDumper) — recover C# metadata from `libil2cpp.so` + `global-metadata.dat`, emit a dummy DLL + IDA/Ghidra scripts.
+- [Perfare/Zygisk-Il2CppDumper](https://github.com/Perfare/Zygisk-Il2CppDumper) — runtime dump (Zygisk) when the game encrypts `global-metadata.dat` on disk — dump after the game decrypts it in RAM.
+- [vfsfitvnm/frida-il2cpp-bridge](https://github.com/vfsfitvnm/frida-il2cpp-bridge) — IL2CPP runtime interop via Frida, no metadata file needed.
+- [djkaty/Il2CppInspector](https://github.com/djkaty/Il2CppInspector) — replacement/supplement for Il2CppDumper, covers more metadata versions, with clean Ghidra integration.
 
-### C. Trace JNI — tìm biên ký Java↔native
-- [chame1eon/jnitrace](https://github.com/chame1eon/jnitrace) — trace mọi JNI call app gọi (`RegisterNatives`, `CallXXXMethod`, `GetStringUTFChars`…) để chỉ ra **hàm native nào ký** + bắt arg/return. Cách nhanh nhất tìm hàm ký.
-- [chame1eon/jnitrace-engine](https://github.com/chame1eon/jnitrace-engine) — engine `JNIInterceptor.attach` để nhúng vào script Frida của bạn.
+### C. Trace JNI — find the Java↔native signing boundary
+- [chame1eon/jnitrace](https://github.com/chame1eon/jnitrace) — trace every JNI call the app makes (`RegisterNatives`, `CallXXXMethod`, `GetStringUTFChars`…) to pinpoint **which native function signs** + capture its args/return. The fastest way to find the signing function.
+- [chame1eon/jnitrace-engine](https://github.com/chame1eon/jnitrace-engine) — the `JNIInterceptor.attach` engine to embed into your own Frida script.
 
-### D. Inject Frida-gadget / repackage (không cần root)
-- [sensepost/objection](https://github.com/sensepost/objection) — `objection patchapk` nhúng `frida-gadget.so` vào APK + resign (tự thêm quyền INTERNET). Yếu với split APK.
-- [ksg97031/frida-gadget](https://github.com/ksg97031/frida-gadget) — inject gadget vào APK/IPA 1 lệnh (hợp CI).
-- [NickstaDB/patch-apk](https://github.com/NickstaDB/patch-apk) — bọc objection, xử được split/multi-APK.
-- [ax/apk.sh](https://github.com/ax/apk.sh) — script all-in-one pull/decode/inject/rebuild/sign.
+### D. Inject Frida-gadget / repackage (no root needed)
+- [sensepost/objection](https://github.com/sensepost/objection) — `objection patchapk` embeds `frida-gadget.so` into the APK + resigns (auto-adds the INTERNET permission). Weak with split APKs.
+- [ksg97031/frida-gadget](https://github.com/ksg97031/frida-gadget) — inject the gadget into an APK/IPA in one command (CI-friendly).
+- [NickstaDB/patch-apk](https://github.com/NickstaDB/patch-apk) — wraps objection, handles split/multi-APK.
+- [ax/apk.sh](https://github.com/ax/apk.sh) — all-in-one script to pull/decode/inject/rebuild/sign.
 
-### E. Bypass hardening (mèo-vờn-chuột, verify độ tươi trước khi dùng)
-- [scottyab/rootbeer](https://github.com/scottyab/rootbeer) — thư viện **detect** root app nhúng (KHÔNG phải bypass) — biết tập check (su, BusyBox, test-keys, path Magisk) để hook vô hiệu từng cái bằng Frida.
-- [KOWX712/PlayIntegrityFix](https://github.com/KOWX712/PlayIntegrityFix) — fork PIF đang duy trì (qua BASIC verdict bằng spoof build/attestation). ⚠️ Bản gốc `chiteroman/PlayIntegrityFix` đã **bị gỡ khỏi GitHub** — dùng fork này. Không phải root-hider.
-- [Displax/safetynet-fix](https://github.com/Displax/safetynet-fix) — fork mở rộng sang Play Integrity. ⚠️ cat-and-mouse.
-- Root *hiding* (lớp khác attestation): Shamiko / Zygisk DenyList — nhắc khái niệm, không có upstream canonical đáng link.
+### E. Bypass hardening (cat-and-mouse, verify freshness before use)
+- [scottyab/rootbeer](https://github.com/scottyab/rootbeer) — a library apps embed to **detect** root (NOT bypass) — know the set of checks (su, BusyBox, test-keys, Magisk paths) so you can hook each one out with Frida.
+- [KOWX712/PlayIntegrityFix](https://github.com/KOWX712/PlayIntegrityFix) — a maintained PIF fork (passes the BASIC verdict by spoofing build/attestation). ⚠️ The original `chiteroman/PlayIntegrityFix` was **removed from GitHub** — use this fork. Not a root-hider.
+- [Displax/safetynet-fix](https://github.com/Displax/safetynet-fix) — fork extended to Play Integrity. ⚠️ cat-and-mouse.
+- Root *hiding* (a different layer from attestation): Shamiko / Zygisk DenyList — mentioned as concepts, no canonical upstream worth linking.
 
 ### F. iOS (bonus)
-- [AloneMonkey/frida-ios-dump](https://github.com/AloneMonkey/frida-ios-dump) — dump IPA **đã giải mã** FairPlay qua Frida. ⚠️ hỏng trên Frida 17+, ít duy trì — cân nhắc `bagbak`.
-- [KJCracks/Clutch](https://github.com/KJCracks/Clutch) — decrypt on-device (`posix_spawn`) ra IPA (iOS cũ).
-- [theos/theos](https://github.com/theos/theos) — build system viết tweak/hook iOS (Substrate/Logos).
-- [nygard/class-dump](https://github.com/nygard/class-dump) — tái tạo header `@interface` Obj-C từ Mach-O (Swift cần tool khác).
+- [AloneMonkey/frida-ios-dump](https://github.com/AloneMonkey/frida-ios-dump) — dump a **FairPlay-decrypted** IPA via Frida. ⚠️ broken on Frida 17+, barely maintained — consider `bagbak`.
+- [KJCracks/Clutch](https://github.com/KJCracks/Clutch) — on-device decrypt (`posix_spawn`) into an IPA (older iOS).
+- [theos/theos](https://github.com/theos/theos) — build system for writing iOS tweaks/hooks (Substrate/Logos).
+- [nygard/class-dump](https://github.com/nygard/class-dump) — reconstruct Obj-C `@interface` headers from a Mach-O (Swift needs other tools).
 
 ### G. Protobuf / binary protocol
-- [marin-m/pbtk](https://github.com/marin-m/pbtk) — dựng lại `.proto` từ reflection metadata nhúng trong binary (C++/Java/web) + GUI sửa/fuzz traffic.
-- [mildsunrise/protobuf-inspector](https://github.com/mildsunrise/protobuf-inspector) — decode protobuf **không cần schema** ra cây wire-level, rồi annotate dần dựng lại schema.
-- [nccgroup/blackboxprotobuf](https://github.com/nccgroup/blackboxprotobuf) — encode/decode schema-less (PyPI `bbpb`), nhúng Burp/mitmproxy để decode **và re-encode** sửa traffic.
+- [marin-m/pbtk](https://github.com/marin-m/pbtk) — rebuild `.proto` from reflection metadata embedded in a binary (C++/Java/web) + a GUI to edit/fuzz traffic.
+- [mildsunrise/protobuf-inspector](https://github.com/mildsunrise/protobuf-inspector) — decode protobuf **without a schema** into a wire-level tree, then annotate it to rebuild the schema incrementally.
+- [nccgroup/blackboxprotobuf](https://github.com/nccgroup/blackboxprotobuf) — schema-less encode/decode (PyPI `bbpb`), plugs into Burp/mitmproxy to decode **and re-encode** modified traffic.
 
 ### H. Firmware / IoT (bonus)
-- [ReFirmLabs/binwalk](https://github.com/ReFirmLabs/binwalk) — scan signature + carve filesystem/kernel; entropy (`-E`) phát hiện vùng mã hoá/nén. Nước đi đầu tiên.
-- [onekey-sec/unblob](https://github.com/onekey-sec/unblob) — extract đệ quy, chính xác format hơn binwalk khi container lồng nhau.
-- [rampageX/firmware-mod-kit](https://github.com/rampageX/firmware-mod-kit) — không chỉ extract mà **rebuild/repack** firmware (SquashFS lạ). Helper: `sasquatch`, `jefferson`, `ubireader`.
+- [ReFirmLabs/binwalk](https://github.com/ReFirmLabs/binwalk) — signature scan + carve the filesystem/kernel; entropy (`-E`) reveals encrypted/compressed regions. The first move.
+- [onekey-sec/unblob](https://github.com/onekey-sec/unblob) — recursive extraction, more format-accurate than binwalk when containers are nested.
+- [rampageX/firmware-mod-kit](https://github.com/rampageX/firmware-mod-kit) — not just extract but **rebuild/repack** firmware (exotic SquashFS). Helpers: `sasquatch`, `jefferson`, `ubireader`.
 
 ---
 
-## 🧭 Quyết định: emulate `.so` vs Frida-RPC vs viết lại thuần
-- **Emulate native-lib (unidbg/Qiling/Unicorn)** khi logic ký nằm trong `.so` obfuscate hoặc không có device/root. Được signer độc lập, scale tốt (chạy ngàn account server-side, không device) — đổi lại phải mô hình đủ JNI/OS để hàm chạy.
-- **Frida native-RPC** khi *có* device/emulator và muốn nhanh: `rpc.exports` + `NativeFunction` biến app sống thành oracle ký trong vài phút, đúng theo định nghĩa. Nhược: mỗi đơn vị concurrency cần 1 device, vỡ khi app update/detect Frida, khó scale.
-- **Viết lại thuần (đọc thuật toán → rewrite Python)** chỉ khi signer đơn giản/đã hiểu (vd HMAC-SHA256 trên sorted params + salt tĩnh lấy từ jadx). Nhanh & bền nhất lúc chạy (không emulator/device) — nhưng là bẫy nếu obfuscate nặng hoặc có state native ẩn.
-- **Quy tắc ngón tay cái:** **trace trước** (jnitrace / frida-il2cpp-bridge) tìm biên + thấy input/output → thử hiểu → đơn giản thì reimplement; `.so` rối thì emulate; cần chạy ngay & có device thì Frida-RPC.
-- **Hardening là lớp riêng & dễ hỏng:** bypass root/Frida/integrity (mục E) là mèo-vờn-chuột, hay bị gỡ khỏi GitHub (vd PIF của chiteroman). Pin đúng version, chờ nó rot, và **ưu tiên emulate** vì né hẳn detection trên device.
+## 🧭 Decision: emulate the `.so` vs Frida-RPC vs pure rewrite
+- **Emulate the native lib (unidbg/Qiling/Unicorn)** when the signing logic lives in an obfuscated `.so`, or you have no device/root. You get an independent signer that scales well (run thousands of accounts server-side, no device) — in exchange you must model enough JNI/OS for the function to run.
+- **Frida native-RPC** when you *do* have a device/emulator and want speed: `rpc.exports` + `NativeFunction` turns the live app into a signing oracle in minutes, matching the definition exactly. Downside: each unit of concurrency needs a device, it breaks on app updates/Frida detection, hard to scale.
+- **Pure rewrite (read the algorithm → rewrite in Python)** only when the signer is simple/well-understood (e.g. HMAC-SHA256 over sorted params + a static salt pulled from jadx). Fastest & most durable at runtime (no emulator/device) — but a trap if it's heavily obfuscated or has hidden native state.
+- **Rule of thumb:** **trace first** (jnitrace / frida-il2cpp-bridge) to find the boundary + see inputs/outputs → try to understand it → if simple, reimplement; if the `.so` is tangled, emulate; if you need it running right now and have a device, Frida-RPC.
+- **Hardening is a separate, fragile layer:** bypassing root/Frida/integrity (section E) is cat-and-mouse and often gets pulled from GitHub (e.g. chiteroman's PIF). Pin the right version, expect it to rot, and **prefer emulation** since it sidesteps on-device detection entirely.
 
 ---
 
-## Pattern chắt lọc (ánh xạ sang bài học)
+## Distilled patterns (mapped to lessons)
 
-1. **Signed header = hash của request.** X-Gorgon/X-Ladon/X-Argus, IG `signed_body`… = HMAC/hash-obfuscate trên (params sắp xếp + body + timestamp + secret/nonce). Việc cần làm: tìm **secret** + đúng **cách canonicalize** (thứ tự field).
-2. **Mượn signer vs viết lại** — 3 nấc tăng dần: (a) chạy browser/app thật để nó tự ký; (b) **emulate native `.so`** trong CPU emulator; (c) reimplement thuật toán thuần Python/Go. Đánh đổi công sức ↔ độ bền.
-3. **Rút key/thuật toán từ native lib.** Secret thật nằm trong `.so` đóng gói → lấy bằng decompile (Ghidra/IDA, Il2CppDumper) hoặc hook runtime (Frida) đọc key/output trực tiếp.
-4. **Device fingerprint bền + đăng ký 1 lần.** Mint device-id + UUID (android_id, model, build) 1 lần rồi tái dùng — server gắn session/anti-fraud theo device ổn định (instagrapi, gpsoauth).
-5. **Export/restore session, không login lại.** Login là bước rủi ro/captcha nhất → serialize session (cookie/token/device) ra đĩa rồi restore (instagrapi, instaloader, twikit).
-6. **Guest/cookie token → endpoint JSON/GraphQL nội bộ.** Reverse web: lấy guest/cookie token rồi gọi đúng endpoint SPA dùng (LinkedIn Voyager, twikit/snscrape).
-7. **Impersonate TLS/JA3 + HTTP/2.** Anti-bot soi cả handshake TLS + HTTP/2 settings → dùng curl_cffi/tls-client khớp browser thật.
-8. **Giả telemetry anti-bot.** Akamai/PerimeterX/DataDome chờ payload sensor/behavior → tái tạo (akamai-bmp-generator) hoặc giải mã để hiểu (SensorData.Decryptor). Mong manh nhất.
-9. **Protobuf là wire format.** Protocol realtime/mobile hay serialize protobuf → phải phục hồi `.proto` (discord-protos, go-librespot, TikTok Live, whatspec) trước khi decode.
-10. **Realtime = WebSocket + handshake riêng.** Push/live dùng WebSocket URL có ký/hết hạn (TikTok Live 30s) hoặc handshake crypto (WhatsApp **Noise**) bọc protobuf.
-11. **Master-token / token-exchange.** 1 credential dài hạn khó lấy (Google master token qua EncryptedPasswd; Xiaomi device token) đổi lấy token ngắn hạn per-service.
-12. **Trích cả spec (meta-move).** Đòn mạnh nhất: parse bundle JS/native ra **toàn bộ protocol surface** (whatspec, sensebook) thay vì reverse từng endpoint — biến reverse thành "spec sống".
+1. **A signed header = a hash of the request.** X-Gorgon/X-Ladon/X-Argus, IG `signed_body`… = HMAC/obfuscated-hash over (sorted params + body + timestamp + secret/nonce). What to do: find the **secret** + the exact **canonicalization** (field order).
+2. **Borrow the signer vs rewrite it** — three escalating tiers: (a) run the real browser/app so it signs itself; (b) **emulate the native `.so`** in a CPU emulator; (c) reimplement the algorithm in pure Python/Go. Trade effort ↔ durability.
+3. **Extract the key/algorithm from the native lib.** The real secret lives inside a packed `.so` → get it by decompiling (Ghidra/IDA, Il2CppDumper) or hooking the runtime (Frida) to read the key/output directly.
+4. **Durable device fingerprint + register once.** Mint a device-id + UUID (android_id, model, build) once then reuse it — the server ties session/anti-fraud to a stable device (instagrapi, gpsoauth).
+5. **Export/restore the session, don't re-login.** Login is the riskiest/most captcha-prone step → serialize the session (cookie/token/device) to disk then restore it (instagrapi, instaloader, twikit).
+6. **Guest/cookie token → internal JSON/GraphQL endpoint.** Reversing web: get a guest/cookie token then call the exact endpoint the SPA uses (LinkedIn Voyager, twikit/snscrape).
+7. **Impersonate TLS/JA3 + HTTP/2.** Anti-bot inspects both the TLS handshake + HTTP/2 settings → use curl_cffi/tls-client to match a real browser.
+8. **Forge anti-bot telemetry.** Akamai/PerimeterX/DataDome wait for a sensor/behavior payload → reproduce it (akamai-bmp-generator) or decrypt it to understand it (SensorData.Decryptor). The most fragile.
+9. **Protobuf is the wire format.** Realtime/mobile protocols often serialize protobuf → you must recover the `.proto` (discord-protos, go-librespot, TikTok Live, whatspec) before decoding.
+10. **Realtime = WebSocket + a dedicated handshake.** Push/live uses a signed/expiring WebSocket URL (TikTok Live 30s) or a crypto handshake (WhatsApp **Noise**) wrapping protobuf.
+11. **Master-token / token-exchange.** One hard-to-get long-lived credential (Google master token via EncryptedPasswd; Xiaomi device token) is exchanged for short-lived per-service tokens.
+12. **Extract the whole spec (the meta-move).** The strongest move: parse the JS/native bundle into the **entire protocol surface** (whatspec, sensebook) instead of reversing endpoint by endpoint — turning the reverse into a "living spec."
 
-### Caveat luôn dạy kèm
-- Repo signer/anti-bot pin theo version, vỡ mỗi lần app/vendor update; nhiều cái archived/DMCA (pysnap/Snaphax, captcha solver). Tốt để học **kỹ thuật**, không đảm bảo "chạy hôm nay".
-- Ownership hay nhầm: instagrapi = **subzeroid** (trước adw0rd); fbchat gốc = **carpedm20** (nhiều fork); frida-il2cpp-bridge canonical = **vfsfitvnm**.
+### Caveats always taught alongside
+- Signer/anti-bot repos are version-pinned and break every time the app/vendor updates; many are archived/DMCA'd (pysnap/Snaphax, captcha solvers). Good for learning the **technique**, no guarantee of "works today."
+- Ownership is often confused: instagrapi = **subzeroid** (formerly adw0rd); the original fbchat = **carpedm20** (many forks); the canonical frida-il2cpp-bridge = **vfsfitvnm**.

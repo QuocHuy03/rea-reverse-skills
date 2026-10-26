@@ -1,23 +1,23 @@
 /*
  * ssl-unpin.js — universal SSL pinning bypass (Java layer + native BoringSSL),
- * có xử lý .so nạp muộn (spawn mode) + quét class obfuscate.
- * Dùng: frida -U -f <package> -l ssl-unpin.js --no-pause
+ * handles late-loaded .so (spawn mode) + scans for obfuscated classes.
+ * Usage: frida -U -f <package> -l ssl-unpin.js --no-pause
  *
- * Kỹ thuật (đúc kết từ nhiều script cộng đồng):
+ * Technique (distilled from several community scripts):
  *  Java: TrustManager-all, HostnameVerifier-all, OkHttp CertificatePinner
- *        (cả tên chuẩn lẫn quét class obfuscate), Conscrypt TrustManagerImpl.
- *  Native: hook ssl_verify trong libssl.so; nếu .so nạp muộn thì bắt qua
- *          android_dlopen_ext/dlopen rồi retry (quan trọng cho app Flutter/
- *          app bundle networking stack riêng).
- * Không chạm hàm crypto signature/HMAC/version-check của app (tránh làm vỡ app).
- * Bí hơn nữa thì dùng kèm frida-multiple-unpinning / objection.
+ *        (both the standard name and a scan for obfuscated classes), Conscrypt TrustManagerImpl.
+ *  Native: hook ssl_verify in libssl.so; if the .so loads late, catch it via
+ *          android_dlopen_ext/dlopen then retry (important for Flutter apps /
+ *          app bundles with their own networking stack).
+ * Does not touch the app's signature/HMAC/version-check crypto functions (to avoid breaking the app).
+ * If still stuck, pair it with frida-multiple-unpinning / objection.
  */
 'use strict';
 
 /* ------------------------------ JAVA LAYER ------------------------------ */
 function hookJava() {
   Java.perform(function () {
-    // 1) TrustManager "chấp nhận tất cả"
+    // 1) TrustManager "accept everything"
     try {
       const X509TrustManager = Java.use('javax.net.ssl.X509TrustManager');
       const SSLContext = Java.use('javax.net.ssl.SSLContext');
@@ -37,7 +37,7 @@ function hookJava() {
       console.log('[+] TrustManager/SSLContext hooked');
     } catch (e) { console.log('[-] TrustManager:', e.message); }
 
-    // 2) HostnameVerifier "chấp nhận mọi host" (default cho HttpsURLConnection)
+    // 2) HostnameVerifier "accept any host" (default for HttpsURLConnection)
     try {
       const HostnameVerifier = Java.use('javax.net.ssl.HostnameVerifier');
       const HttpsURLConnection = Java.use('javax.net.ssl.HttpsURLConnection');
@@ -50,15 +50,15 @@ function hookJava() {
       console.log('[+] HostnameVerifier hooked');
     } catch (e) { console.log('[-] HostnameVerifier:', e.message); }
 
-    // 3) OkHttp CertificatePinner — tên chuẩn
+    // 3) OkHttp CertificatePinner — standard name
     try {
       const CP = Java.use('okhttp3.CertificatePinner');
       CP.check.overload('java.lang.String', 'java.util.List').implementation = function () {};
       try { CP.check.overload('java.lang.String', '[Ljava.security.cert.Certificate;').implementation = function () {}; } catch (_) {}
       console.log('[+] OkHttp CertificatePinner hooked');
-    } catch (e) { /* có thể bị obfuscate → bước 3b */ }
+    } catch (e) { /* may be obfuscated → step 3b */ }
 
-    // 3b) OkHttp bị obfuscate/bundle: quét class loaded có method check(String, List)
+    // 3b) OkHttp obfuscated/bundled: scan loaded classes for a check(String, List) method
     try {
       Java.enumerateLoadedClasses({
         onMatch: function (name) {
@@ -79,7 +79,7 @@ function hookJava() {
       });
     } catch (_) {}
 
-    // 4) Conscrypt TrustManagerImpl (nhiều app pin ở đây)
+    // 4) Conscrypt TrustManagerImpl (many apps pin here)
     try {
       const TMI = Java.use('com.android.org.conscrypt.TrustManagerImpl');
       TMI.checkTrustedRecursive.implementation = function () { return Java.use('java.util.ArrayList').$new(); };
@@ -104,8 +104,8 @@ function neutralizeBoringSSL(modName) {
       console.log('[+] BoringSSL custom_verify neutralized (' + modName + ')');
       return true;
     }
-    // Fallback: hàm ssl_verify_peer_cert bị strip → cần pattern scan riêng cho từng build.
-    console.log('[-] ' + modName + ': không thấy symbol custom_verify (có thể strip)');
+    // Fallback: ssl_verify_peer_cert is stripped → needs a per-build pattern scan.
+    console.log('[-] ' + modName + ': custom_verify symbol not found (may be stripped)');
     return false;
   } catch (e) { console.log('[-] BoringSSL ' + modName + ':', e.message); return false; }
 }
@@ -118,7 +118,7 @@ function hookNative() {
   });
   if (done) return;
 
-  // .so nạp muộn → bắt qua dlopen rồi thử lại (spawn mode timing)
+  // late-loaded .so → catch it via dlopen then retry (spawn mode timing)
   ['android_dlopen_ext', 'dlopen'].forEach(function (fn) {
     const p = Module.findExportByName(null, fn);
     if (!p) return;
@@ -132,13 +132,13 @@ function hookNative() {
       },
     });
   });
-  console.log('[*] native: chờ libssl nạp qua dlopen…');
+  console.log('[*] native: waiting for libssl to load via dlopen…');
 }
 
 /* -------------------------------- RUN ---------------------------------- */
 hookJava();
 setTimeout(hookNative, 300);
-// backup polling cho native strip/nạp muộn
+// backup polling for stripped/late-loaded native
 let tries = 0;
 const poll = setInterval(function () {
   if (++tries > 60) return clearInterval(poll);

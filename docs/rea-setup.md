@@ -1,67 +1,67 @@
-# Cài & cấu hình REA (lõi phân tích dùng chung)
+# Install & configure REA (the shared analysis core)
 
-[REA](https://github.com/morluto/rea) (`rea-agents`) là CLI + MCP server để reverse-engineer: decompile, đọc evidence có cấu trúc, bắt & phân tích traffic. Ba skill trong repo này đều gọi REA cho khâu đọc code / phân tích binary.
+[REA](https://github.com/morluto/rea) (`rea-agents`) is a CLI + MCP server for reverse engineering: decompile, read structured evidence, capture and analyze traffic. All three skills in this repo call REA for the code-reading / binary-analysis steps.
 
-REA **không tự cài** các engine phân tích (Ghidra, JADX, Java, IDA…). Bạn mang theo engine, REA điều phối.
+REA does **not install** the analysis engines itself (Ghidra, JADX, Java, IDA…). You bring the engine; REA orchestrates it.
 
-## 1. Cài REA làm MCP server
+## 1. Install REA as an MCP server
 
-Yêu cầu **Node.js ≥ 22.23.4** (hoặc 24.x ≥ 24.22.1, hoặc ≥ 26.12.1). Kiểm tra `node --version`; nếu thấp hơn thì nâng (vd `winget upgrade OpenJS.NodeJS.22`).
-
-```bash
-# đăng ký REA cho Claude Code (dùng gạch dưới: claude_code)
-npx -y rea-agents@latest setup --client claude_code --dry-run   # xem trước
-npx -y rea-agents@latest setup --client claude_code --yes       # áp dụng
-```
-
-Lệnh này thêm server `rea` vào `~/.claude.json` và cài skill `reverse-engineer-anything` của REA. **Khởi động lại Claude Code / IDE** để tool `mcp__rea__*` xuất hiện (kiểm tra bằng `/mcp`).
-
-Client khác: thay `claude_code` bằng `codex`, `cursor`, `vscode`, `gemini_cli`, `windsurf`, `opencode`…
-
-## 2. Gắn engine phân tích (tuỳ loại mục tiêu)
-
-Đặt các biến môi trường dưới đây ở **User scope** (shell mới tự có) hoặc để `rea setup` nhúng vào registration. REA đọc chúng khi khởi động.
-
-### JDK 21 đầy đủ — cần cho cả Ghidra lẫn JADX
-Phải là **full JDK** (có `jdk.compiler`), không phải JRE. Kiểm: `java --list-modules | grep jdk.compiler`.
-```
-JAVA_HOME = <đường dẫn JDK 21>      # vd C:\Users\<you>\scoop\apps\temurin21-jdk\current
-```
-
-### Ghidra 12.1.x — phân tích native (exe/dll/.so, .NET NativeAOT)
-Tải bản REA pin (hiện **12.1.4**, không dùng 12.2) từ [releases của Ghidra](https://github.com/NationalSecurityAgency/ghidra/releases), giải nén, rồi:
-```
-GHIDRA_INSTALL_DIR = <thư mục ghidra_12.1.4_PUBLIC>
-```
-
-### JADX headless 0.7.1 — phân tích APK (Android)
-Tải JAR `jadx-headless-mcp-0.7.1-all.jar` từ [1013503897/jadx-headless-mcp release v0.7.1](https://github.com/1013503897/jadx-headless-mcp/releases/tag/v0.7.1) (REA verify theo sha256 cố định), rồi:
-```
-REA_JADX_MCP_JAR = <đường dẫn tuyệt đối tới jadx-headless-mcp-0.7.1-all.jar>
-```
-
-### (Tuỳ chọn) IDA / Kuna
-Native nâng cao — xem `docs/ida-provider.md` / `docs/kuna-provider.md` trong repo REA. Không bắt buộc.
-
-## 3. Kiểm tra sẵn sàng
+Requires **Node.js ≥ 22.23.4** (or 24.x ≥ 24.22.1, or ≥ 26.12.1). Check with `node --version`; if it's lower, upgrade (e.g. `winget upgrade OpenJS.NodeJS.22`).
 
 ```bash
-rea doctor --format json            # hoặc: npx -y rea-agents@latest doctor
+# register REA for Claude Code (use an underscore: claude_code)
+npx -y rea-agents@latest setup --client claude_code --dry-run   # preview
+npx -y rea-agents@latest setup --client claude_code --yes       # apply
 ```
-Nhìn `providerInspections[]`: provider nào `available: true` là dùng được. `rea providers` liệt kê chi tiết khả năng từng provider.
 
-## 4. Dùng qua CLI (không cần MCP)
+This command adds the `rea` server to `~/.claude.json` and installs REA's `reverse-engineer-anything` skill. **Restart Claude Code / your IDE** so the `mcp__rea__*` tools appear (verify with `/mcp`).
 
-Mọi tool đều chạy được dạng CLI — tiện khi MCP chưa nạp hoặc muốn script:
+Other clients: replace `claude_code` with `codex`, `cursor`, `vscode`, `gemini_cli`, `windsurf`, `opencode`…
+
+## 2. Attach analysis engines (depending on target type)
+
+Set the environment variables below at **User scope** (new shells pick them up automatically), or have `rea setup` embed them into the registration. REA reads them at startup.
+
+### Full JDK 21 — needed for both Ghidra and JADX
+Must be a **full JDK** (includes `jdk.compiler`), not a JRE. Check: `java --list-modules | grep jdk.compiler`.
+```
+JAVA_HOME = <path to JDK 21>      # e.g. C:\Users\<you>\scoop\apps\temurin21-jdk\current
+```
+
+### Ghidra 12.1.x — native analysis (exe/dll/.so, .NET NativeAOT)
+Download the version REA pins to (currently **12.1.4**, do not use 12.2) from [Ghidra releases](https://github.com/NationalSecurityAgency/ghidra/releases), extract it, then:
+```
+GHIDRA_INSTALL_DIR = <ghidra_12.1.4_PUBLIC folder>
+```
+
+### JADX headless 0.7.1 — APK analysis (Android)
+Download the `jadx-headless-mcp-0.7.1-all.jar` JAR from [1013503897/jadx-headless-mcp release v0.7.1](https://github.com/1013503897/jadx-headless-mcp/releases/tag/v0.7.1) (REA verifies it against a fixed sha256), then:
+```
+REA_JADX_MCP_JAR = <absolute path to jadx-headless-mcp-0.7.1-all.jar>
+```
+
+### (Optional) IDA / Kuna
+Advanced native — see `docs/ida-provider.md` / `docs/kuna-provider.md` in the REA repo. Not required.
+
+## 3. Check readiness
+
+```bash
+rea doctor --format json            # or: npx -y rea-agents@latest doctor
+```
+Look at `providerInspections[]`: any provider with `available: true` is usable. `rea providers` lists each provider's capabilities in detail.
+
+## 4. Use via the CLI (no MCP needed)
+
+Every tool also runs as a CLI — handy when MCP isn't loaded yet or you want to script it:
 ```bash
 npx -y rea-agents@latest <command> [args]
-# vd:
+# e.g.:
 npx -y rea-agents@latest inspect-android-package app.apk
 npx -y rea-agents@latest analyze target.exe --provider ghidra
-npx -y rea-agents@latest --help         # danh sách đầy đủ ~200 lệnh
+npx -y rea-agents@latest --help         # full list of ~200 commands
 ```
-Mẹo token: thêm `--token-limit N` / `--format json` khi output to; mỗi kết quả trả `evidence_id` để xin view chi tiết thay vì gọi lại cả lệnh.
+Token tip: add `--token-limit N` / `--format json` when output is large; each result returns an `evidence_id` so you can request a detailed view instead of re-running the whole command.
 
-## Nguyên tắc đọc kết quả REA
+## Principles for reading REA results
 
-REA tách rõ **quan sát được** (observation) vs **suy luận** (inference) vs **chưa biết** (unknown), kèm `evidence_id`. Khi kết luận, bám đúng ba mức đó — đừng coi phân tích tĩnh là đã quan sát hành vi runtime. Verify lại bằng thực nghiệm (chạy thử request đã dựng, so khớp giá trị app thật gửi) trước khi tin.
+REA clearly separates **observation** vs **inference** vs **unknown**, each with an `evidence_id`. When you draw a conclusion, stick to those three levels — don't treat static analysis as if you had observed runtime behavior. Verify experimentally (run the request you built, match it against the values the real app sends) before trusting it.

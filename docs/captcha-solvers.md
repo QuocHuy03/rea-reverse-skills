@@ -1,22 +1,22 @@
-# Giải captcha (captcha_solver.py)
+# Solving captchas (captcha_solver.py)
 
-Khi luồng reverse vướng captcha (reCAPTCHA v2/v3, hCaptcha, Cloudflare Turnstile, image/funcaptcha…), dùng dịch vụ giải captcha qua API. Tất cả đều cùng mô hình: **gửi task → poll tới khi xong → lấy token**, rồi nhét token vào request như browser thật gửi.
+When the reverse-engineering flow hits a captcha (reCAPTCHA v2/v3, hCaptcha, Cloudflare Turnstile, image/funcaptcha…), solve it via a captcha-solving service's API. They all follow the same model: **submit a task → poll until done → get a token**, then insert the token into the request exactly as a real browser would send it.
 
-> Cần **API key** của dịch vụ (user tự đăng ký + nạp tiền). Skill hỏi key khi tới bước này; **không hardcode key vào code commit** — đọc từ env/`.env`.
+> You need the service's **API key** (the user registers and tops it up themselves). The skill asks for the key when it reaches this step; **do not hardcode the key into committed code** — read it from env/`.env`.
 
-## Dịch vụ hỗ trợ (chọn 1, đều tương đương)
+## Supported services (pick one, all equivalent)
 
-| Dịch vụ | Domain | Ghi chú |
+| Service | Domain | Notes |
 |---|---|---|
-| **NextCaptcha** | nextcaptcha.com | API gần giống 2captcha; có reCAPTCHA/hCaptcha/Turnstile |
-| **2captcha** | 2captcha.com | Phổ biến nhất, docs đầy đủ, nhiều lib sẵn (`2captcha-python`) |
-| **CapSolver** | capsolver.com | Nhanh, mạnh reCAPTCHA v3/Turnstile/FunCaptcha; endpoint `createTask`/`getTaskResult` |
-| **EzCaptcha** | ezcaptcha.com | Rẻ, API kiểu CapSolver (`createTask`) |
-| **Capzy** | capzy.ai | API **y hệt CapSolver** (`createTask`/`getTaskResult`, chỉ đổi base_url → `https://api.capzy.ai`); có SDK `pip install capzy` (`.solve()`); token-bound từ ~$0.40/1k, tặng $0.10 test. hCaptcha đang phát triển |
+| **NextCaptcha** | nextcaptcha.com | API close to 2captcha's; supports reCAPTCHA/hCaptcha/Turnstile |
+| **2captcha** | 2captcha.com | The most popular; full docs, many ready-made libs (`2captcha-python`) |
+| **CapSolver** | capsolver.com | Fast, strong on reCAPTCHA v3/Turnstile/FunCaptcha; `createTask`/`getTaskResult` endpoints |
+| **EzCaptcha** | ezcaptcha.com | Cheap, CapSolver-style API (`createTask`) |
+| **Capzy** | capzy.ai | API **identical to CapSolver** (`createTask`/`getTaskResult`, only change base_url → `https://api.capzy.ai`); has a `pip install capzy` SDK (`.solve()`); token-bound from ~$0.40/1k, $0.10 free to test. hCaptcha in development |
 
-## Hai kiểu API
+## Two API styles
 
-**a) Kiểu 2captcha / NextCaptcha** (in → out, 2 bước GET/POST):
+**a) 2captcha / NextCaptcha style** (in → out, 2-step GET/POST):
 ```python
 # submit
 r = requests.post("https://api.2captcha.com/in.php", data={
@@ -33,7 +33,7 @@ while True:
         token = res["request"]; break
 ```
 
-**b) Kiểu CapSolver / EzCaptcha** (createTask → getTaskResult, JSON):
+**b) CapSolver / EzCaptcha style** (createTask → getTaskResult, JSON):
 ```python
 base = "https://api.capsolver.com"   # ezcaptcha: https://api.ezcaptcha.com
 tid = requests.post(f"{base}/createTask", json={
@@ -49,7 +49,7 @@ while True:
         token = res["solution"]["gRecaptchaResponse"]; break
 ```
 
-## Mẫu captcha_solver.py (đa nhà cung cấp)
+## Sample captcha_solver.py (multi-provider)
 
 ```python
 import os, time, requests
@@ -58,10 +58,10 @@ PROVIDER = os.getenv("CAPTCHA_PROVIDER", "capsolver")   # capsolver|ezcaptcha|ca
 API_KEY  = os.getenv("CAPTCHA_API_KEY")
 
 def solve_recaptcha_v2(site_key: str, page_url: str) -> str:
-    """Trả về g-recaptcha-response token. Raise nếu fail/timeout."""
+    """Return the g-recaptcha-response token. Raise on failure/timeout."""
     if not API_KEY:
-        raise RuntimeError("Thiếu CAPTCHA_API_KEY (env)")
-    if PROVIDER in ("capsolver", "ezcaptcha", "capzy"):   # cùng shape createTask/getTaskResult
+        raise RuntimeError("Missing CAPTCHA_API_KEY (env)")
+    if PROVIDER in ("capsolver", "ezcaptcha", "capzy"):   # same createTask/getTaskResult shape
         base = {"capsolver": "https://api.capsolver.com",
                 "ezcaptcha": "https://api.ezcaptcha.com",
                 "capzy":     "https://api.capzy.ai"}[PROVIDER]
@@ -91,6 +91,6 @@ def solve_recaptcha_v2(site_key: str, page_url: str) -> str:
         raise TimeoutError("captcha timeout")
 ```
 
-Đổi `type` theo loại captcha: `ReCaptchaV2TaskProxyLess`, `ReCaptchaV3TaskProxyLess`, `HCaptchaTaskProxyLess`, `AntiTurnstileTaskProxyLess`… (xem docs từng nhà cung cấp). Nếu site soi IP token → dùng task có proxy (`...Task` thay vì `...ProxyLess`) + truyền proxy.
+Change `type` according to the captcha kind: `ReCaptchaV2TaskProxyLess`, `ReCaptchaV3TaskProxyLess`, `HCaptchaTaskProxyLess`, `AntiTurnstileTaskProxyLess`… (see each provider's docs). If the site checks the token's IP → use a task with a proxy (`...Task` instead of `...ProxyLess`) and pass the proxy.
 
-**Fallback không dịch vụ:** chạy browser thật (Playwright) qua đúng màn captcha, lấy token sau khi giải tay/tự động, đưa về CLI — chậm, chỉ khi bí.
+**No-service fallback:** drive a real browser (Playwright) through the captcha screen, obtain the token after solving it manually/automatically, and feed it back to the CLI — slow, only when stuck.

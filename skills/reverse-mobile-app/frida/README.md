@@ -1,10 +1,10 @@
 # Frida scripts
 
-- **ssl-unpin.js** — universal SSL pinning bypass. Java layer (TrustManager, HostnameVerifier, OkHttp `CertificatePinner` kể cả bản obfuscate, Conscrypt) + native BoringSSL (`SSL_[CTX_]set_custom_verify`), có hook `android_dlopen_ext`/`dlopen` để bắt `.so` nạp muộn (spawn mode) và polling dự phòng.
-- **dump-signer.js** — TEMPLATE hook hàm ký request để lộ chuỗi-đầu-vào + output. Sửa `TARGET_CLASS`/`TARGET_METHOD` theo class tìm được bằng REA.
+- **ssl-unpin.js** — universal SSL pinning bypass. Java layer (TrustManager, HostnameVerifier, OkHttp `CertificatePinner` including obfuscated builds, Conscrypt) + native BoringSSL (`SSL_[CTX_]set_custom_verify`), with `android_dlopen_ext`/`dlopen` hooks to catch late-loaded `.so`s (spawn mode) and a fallback polling loop.
+- **dump-signer.js** — TEMPLATE hook for the request-signing function to reveal the input string + output. Edit `TARGET_CLASS`/`TARGET_METHOD` to match the class you found with REA.
 
-Kỹ thuật tham khảo thêm:
-- Timing qua `dlopen` + quét class OkHttp obfuscate: học từ [danieldev23/frida-ssl-bypass](https://github.com/danieldev23/frida-ssl-bypass).
-- Bí thì dùng kèm các bản cộng đồng mạnh hơn: [frida-multiple-unpinning](https://codeshare.frida.re/@akabe1/frida-multiple-unpinning/), hoặc `objection android sslpinning disable`.
+Further reference techniques:
+- `dlopen` timing + scanning for obfuscated OkHttp classes: learned from [danieldev23/frida-ssl-bypass](https://github.com/danieldev23/frida-ssl-bypass).
+- When stuck, pair it with stronger community builds: [frida-multiple-unpinning](https://codeshare.frida.re/@akabe1/frida-multiple-unpinning/), or `objection android sslpinning disable`.
 
-Đây là script dùng cho phân tích hợp pháp (app của chính bạn / nghiên cứu được uỷ quyền / CTF). Tuân thủ luật & giấy phép phần mềm.
+These scripts are for lawful analysis (your own apps / authorized research / CTF). Comply with the law and software licenses.

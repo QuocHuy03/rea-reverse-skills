@@ -1,31 +1,31 @@
 # rea-reverse-skills
 
-Bộ **Claude Code skills** để reverse-engineer **app Windows, app Android (mobile) và web app** — bắt & giải protocol/API của phần mềm rồi dựng lại thành **CLI Python chạy ổn định**. Lõi phân tích dùng [**REA**](https://github.com/morluto/rea) (`rea-agents`): decompile headless + đọc evidence có cấu trúc (JADX cho APK, Ghidra cho native, phân tích JS/Electron, bắt & đọc traffic).
+A set of **Claude Code skills** for reverse-engineering **Windows apps, Android (mobile) apps, and web apps** — capture and decode a program's protocol/API, then reimplement it as a **stable Python CLI**. The analysis core uses [**REA**](https://github.com/morluto/rea) (`rea-agents`): headless decompilation + reading structured evidence (JADX for APKs, Ghidra for native, JS/Electron analysis, traffic capture and inspection).
 
-> Mục tiêu cuối của mọi skill: **bỏ được app gốc** — một **CLI** (Python) tự tạo request từ đầu (tự ký, tự mã hoá, tự giải captcha), chạy headless, exit code rõ ràng, lặp lại ổn định. Không DB, không web dashboard. App/emulator/Frida chỉ là giàn giáo lúc reverse.
+> The end goal of every skill: **be able to drop the original app** — a (Python) **CLI** that builds requests from scratch (signs them itself, encrypts itself, solves captchas itself), runs headless, has clear exit codes, and repeats reliably. No DB, no web dashboard. The app/emulator/Frida are only scaffolding during reversing.
 
-## Có gì trong repo
+## What's in the repo
 
-| Skill | Mục tiêu | Lõi phân tích |
+| Skill | Goal | Analysis core |
 |---|---|---|
-| [`reverse-windows-app`](skills/reverse-windows-app/SKILL.md) | App desktop Windows: native PE/exe/dll, .NET, Electron | REA Ghidra / managed / JS, process & network capture |
-| [`reverse-mobile-app`](skills/reverse-mobile-app/SKILL.md) | App Android (APK) chạy trong emulator | REA JADX + mitm/Frida + rebuild client |
+| [`reverse-windows-app`](skills/reverse-windows-app/SKILL.md) | Windows desktop apps: native PE/exe/dll, .NET, Electron | REA Ghidra / managed / JS, process & network capture |
+| [`reverse-mobile-app`](skills/reverse-mobile-app/SKILL.md) | Android apps (APK) running in an emulator | REA JADX + mitm/Frida + rebuild client |
 | [`reverse-web-app`](skills/reverse-web-app/SKILL.md) | Web app / site API | REA web-bundle / HAR / browser scenario + rebuild client |
 
-Tài liệu chung:
-- [`docs/rea-setup.md`](docs/rea-setup.md) — cài & cấu hình REA + các provider (Ghidra, JADX, JDK), portable.
-- [`docs/captcha-solvers.md`](docs/captcha-solvers.md) — giải captcha qua dịch vụ (NextCaptcha / 2captcha / CapSolver / EzCaptcha / Capzy).
-- [`docs/references.md`](docs/references.md) — repo & công cụ GitHub bổ trợ REA cho từng mảng (unpin/Frida, Ghidra, .NET, deobfuscate JS, anti-bot/TLS, captcha, awesome-lists).
-- [`docs/reverse-case-studies.md`](docs/reverse-case-studies.md) — **case reverse thật** (TikTok signer, instagrapi, librespot, WhatsApp, gpsoauth…) + kỹ thuật nặng (emulate `.so` bằng unidbg, IL2CPP, jnitrace) + **pattern chắt lọc** + bảng quyết định *emulate vs Frida-RPC vs viết lại*.
-- [`docs/china-re-arsenal.md`](docs/china-re-arsenal.md) — **kho vũ khí reverse Trung Hoa** (看雪/52pojie): 脱壳 unpack app 加固 (FRIDA-DEXDump/BlackDex/Youpk/FART), r0capture, 算法助手, reverse 微信小程序, 反检测, unidbg-server + **脱壳 workflow** đầy đủ.
+Shared documentation:
+- [`docs/rea-setup.md`](docs/rea-setup.md) — install & configure REA + its providers (Ghidra, JADX, JDK), portable.
+- [`docs/captcha-solvers.md`](docs/captcha-solvers.md) — solve captchas via a service (NextCaptcha / 2captcha / CapSolver / EzCaptcha / Capzy).
+- [`docs/references.md`](docs/references.md) — GitHub repos & tools that complement REA for each area (unpin/Frida, Ghidra, .NET, deobfuscate JS, anti-bot/TLS, captcha, awesome-lists).
+- [`docs/reverse-case-studies.md`](docs/reverse-case-studies.md) — **real reverse-engineering cases** (TikTok signer, instagrapi, librespot, WhatsApp, gpsoauth…) + heavy techniques (emulating `.so` with unidbg, IL2CPP, jnitrace) + **distilled patterns** + a decision table for *emulate vs Frida-RPC vs reimplement*.
+- [`docs/china-re-arsenal.md`](docs/china-re-arsenal.md) — **the Chinese reverse-engineering arsenal** (看雪/52pojie): 脱壳 (unpacking) apps with 加固 (hardening) (FRIDA-DEXDump/BlackDex/Youpk/FART), r0capture, 算法助手, reversing 微信小程序 (WeChat Mini-Program), anti-detection, unidbg-server + a full **脱壳 (unpacking) workflow**.
 
-## Cài vào Claude Code
+## Install into Claude Code
 
-Skill của Claude Code nằm ở `~/.claude/skills/<tên>/SKILL.md` (toàn cục) hoặc `.claude/skills/` trong project. Clone repo rồi copy (hoặc symlink) từng thư mục skill:
+Claude Code skills live at `~/.claude/skills/<name>/SKILL.md` (global) or `.claude/skills/` inside a project. Clone the repo, then copy (or symlink) each skill directory:
 
 ```bash
 git clone https://github.com/QuocHuy03/rea-reverse-skills
-# copy toàn bộ skill vào thư mục skill cá nhân
+# copy all skills into your personal skills directory
 cp -r rea-reverse-skills/skills/* ~/.claude/skills/
 ```
 
@@ -35,14 +35,14 @@ git clone https://github.com/QuocHuy03/rea-reverse-skills
 Copy-Item rea-reverse-skills\skills\* "$env:USERPROFILE\.claude\skills\" -Recurse
 ```
 
-Sau đó mở Claude Code, gõ `/reverse-windows-app`, `/reverse-mobile-app`, hoặc `/reverse-web-app` — hoặc chỉ cần mô tả mục tiêu, skill tự kích hoạt theo `description`.
+Then open Claude Code and type `/reverse-windows-app`, `/reverse-mobile-app`, or `/reverse-web-app` — or just describe your goal and the skill activates automatically based on its `description`.
 
-## Yêu cầu
+## Requirements
 
-- **Claude Code** (CLI hoặc IDE extension).
-- **REA** đã đăng ký làm MCP server — xem [`docs/rea-setup.md`](docs/rea-setup.md). Không có REA thì các skill vẫn mô tả quy trình, nhưng phần decompile/evidence sẽ phải làm thủ công bằng công cụ ngoài.
-- Công cụ theo từng loại mục tiêu (emulator cho mobile, v.v.) — ghi trong từng skill, đều để dạng **biến môi trường / placeholder** để bạn tự điền đường dẫn máy mình.
+- **Claude Code** (CLI or IDE extension).
+- **REA** registered as an MCP server — see [`docs/rea-setup.md`](docs/rea-setup.md). Without REA the skills still describe the workflow, but the decompile/evidence steps will have to be done manually with external tools.
+- Tools for each target type (an emulator for mobile, etc.) — documented in each skill, all given as **environment variables / placeholders** so you fill in your own machine's paths.
 
-## Lưu ý pháp lý
+## Legal notice
 
-Chỉ dùng cho mục đích hợp pháp: phân tích phần mềm của chính bạn, nghiên cứu bảo mật được uỷ quyền, CTF, học tập, khả năng tương tác. Tuân thủ giấy phép phần mềm và luật sở tại. Không commit APK/binary bản quyền, credential, token, hay proxy thật lên repo.
+Use only for lawful purposes: analyzing your own software, authorized security research, CTFs, learning, interoperability. Comply with software licenses and local law. Do not commit copyrighted APKs/binaries, credentials, tokens, or real proxies to the repo.

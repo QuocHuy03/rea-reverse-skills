@@ -1,21 +1,21 @@
 /*
- * dump-signer.js — TEMPLATE hook hàm ký request để lộ công thức.
- * Sửa <FQCN> + <method> theo class tìm được bằng REA (search-android-classes /
- * trace-android-references), rồi: frida -U -f <package> -l dump-signer.js --no-pause
+ * dump-signer.js — TEMPLATE hook for the request-signing function to reveal the formula.
+ * Edit <FQCN> + <method> to match the class you found with REA (search-android-classes /
+ * trace-android-references), then: frida -U -f <package> -l dump-signer.js --no-pause
  *
- * In ra chuỗi ĐẦU VÀO (trước khi hash/HMAC) + giá trị trả về. So chuỗi in được
- * với các field của request thật đã capture → suy ra công thức ghép
- * (path + body + ts + nonce + secret …). Đây là cách nhanh & chắc nhất.
+ * Prints the INPUT string (before hash/HMAC) + the return value. Compare the printed
+ * string against the fields of a real captured request → infer how the formula is assembled
+ * (path + body + ts + nonce + secret …). This is the fastest and most reliable way.
  */
 'use strict';
 
 Java.perform(function () {
-  const TARGET_CLASS = 'com.foo.security.Signer';   // <-- sửa
-  const TARGET_METHOD = 'sign';                     // <-- sửa
+  const TARGET_CLASS = 'com.foo.security.Signer';   // <-- edit
+  const TARGET_METHOD = 'sign';                     // <-- edit
 
   try {
     const C = Java.use(TARGET_CLASS);
-    // hook mọi overload của method
+    // hook every overload of the method
     C[TARGET_METHOD].overloads.forEach(function (ov) {
       ov.implementation = function () {
         const args = Array.prototype.slice.call(arguments);
@@ -29,10 +29,10 @@ Java.perform(function () {
     console.log('[+] hooked ' + TARGET_CLASS + '.' + TARGET_METHOD +
       ' (' + C[TARGET_METHOD].overloads.length + ' overload)');
   } catch (e) {
-    console.log('[-] không hook được: ' + e.message);
+    console.log('[-] could not hook: ' + e.message);
   }
 
-  // Bonus: bắt thuật toán phổ biến để lần key/mode khi chưa biết class ký.
+  // Bonus: catch common algorithms to trace the key/mode when the signing class is unknown.
   try {
     const MD = Java.use('java.security.MessageDigest');
     MD.digest.overload('[B').implementation = function (b) {
