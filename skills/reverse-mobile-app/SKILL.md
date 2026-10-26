@@ -121,5 +121,10 @@ Thành phẩm là **1 CLI chạy ổn định**, không DB/không web UI. Cấu 
 ### 6. Trước khi commit
 `.gitignore` che: `*/apk/`, `*.apk`, `session.json`, `.env`, `*/frida/*.log`, `proxies.txt`, `accounts.txt`, `__pycache__/`. **KHÔNG commit APK** (bản quyền + nặng). Grep sạch credential/proxy/device-id/token/API key thật. Chỉ `git add` file cụ thể.
 
+## Repo tham khảo (bổ trợ REA — xem `docs/references.md`)
+- **Unpin/Frida**: [httptoolkit/frida-interception-and-unpinning](https://github.com/httptoolkit/frida-interception-and-unpinning) (bộ tốt nhất, kèm anti-Frida/anti-root), [sensepost/objection](https://github.com/sensepost/objection) (`sslpinning disable` 1 lệnh). Flutter: [NVISOsecurity/disable-flutter-tls-verification](https://github.com/NVISOsecurity/disable-flutter-tls-verification), [Impact-I/reFlutter](https://github.com/Impact-I/reFlutter). No-root: [shroudedcode/apk-mitm](https://github.com/shroudedcode/apk-mitm).
+- **Tooling**: [iBotPeaches/Apktool](https://github.com/iBotPeaches/Apktool) (patch/rebuild), [Ch0pin/medusa](https://github.com/Ch0pin/medusa) / [nccgroup/house](https://github.com/nccgroup/house) (hook động), [MobSF](https://github.com/MobSF/Mobile-Security-Framework-MobSF).
+- **Captcha**: `docs/captcha-solvers.md`. **Phương pháp chuẩn**: [OWASP/owasp-mastg](https://github.com/OWASP/owasp-mastg).
+
 ## Bắt đầu
 Có app → làm luôn: tạo thư mục `<app>/` → chuẩn bị thiết bị → lấy & decompile APK (REA) → bắt traffic + CA system store, pin thì Frida → **tìm cơ chế ký + mã hoá rồi verify bằng Python** → dựng `client.py`+`signer.py` → ráp `cli.py` chạy pass ổn định. Chưa có app → hỏi đúng 1 câu lấy tên app / package / file APK (+ account test nếu có).

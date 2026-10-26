@@ -14,7 +14,8 @@ Bộ **Claude Code skills** để reverse-engineer **app Windows, app Android (m
 
 Tài liệu chung:
 - [`docs/rea-setup.md`](docs/rea-setup.md) — cài & cấu hình REA + các provider (Ghidra, JADX, JDK), portable.
-- [`docs/captcha-solvers.md`](docs/captcha-solvers.md) — giải captcha qua dịch vụ (NextCaptcha / 2captcha / CapSolver / EzCaptcha).
+- [`docs/captcha-solvers.md`](docs/captcha-solvers.md) — giải captcha qua dịch vụ (NextCaptcha / 2captcha / CapSolver / EzCaptcha / Capzy).
+- [`docs/references.md`](docs/references.md) — repo & công cụ GitHub bổ trợ REA cho từng mảng (unpin/Frida, Ghidra, .NET, deobfuscate JS, anti-bot/TLS, captcha, awesome-lists).
 
 ## Cài vào Claude Code
 

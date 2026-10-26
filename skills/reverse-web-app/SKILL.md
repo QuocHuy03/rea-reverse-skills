@@ -77,5 +77,11 @@ Thành phẩm là **1 CLI chạy ổn định**, không DB/không web UI:
 ### 5. Trước khi commit
 `.gitignore` che: `session.json`, `.env`, `*/captured/`, `*.har`, `proxies.txt`, `accounts.txt`, `__pycache__/`. Grep sạch credential/proxy/API key/token/cookie thật. Chỉ `git add` file cụ thể, KHÔNG `git add -A` mù.
 
+## Repo tham khảo (bổ trợ REA — xem `docs/references.md`)
+- **TLS/anti-bot (client)**: [lexiforest/curl_cffi](https://github.com/lexiforest/curl_cffi) (impersonate JA3/HTTP2 — số 1 Python), [deedy5/primp](https://github.com/deedy5/primp), [Python-Tls-Client](https://github.com/FlorianREGAZ/Python-Tls-Client).
+- **Browser né detection (fallback)**: [ultrafunkamsterdam/nodriver](https://github.com/ultrafunkamsterdam/nodriver), [patchright-python](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-python), [daijro/camoufox](https://github.com/daijro/camoufox). Bắt/replay: [mitmproxy](https://github.com/mitmproxy/mitmproxy).
+- **Deobfuscate JS bundle**: [j4k0xb/webcrack](https://github.com/j4k0xb/webcrack), [pionxzh/wakaru](https://github.com/pionxzh/wakaru), [relative/synchrony](https://github.com/relative/synchrony) (obfuscator.io), [rarecoil/unwebpack-sourcemap](https://github.com/rarecoil/unwebpack-sourcemap).
+- **Captcha**: `docs/captcha-solvers.md`; mã nguồn mở: [QIN2DIM/hcaptcha-challenger](https://github.com/QIN2DIM/hcaptcha-challenger).
+
 ## Bắt đầu
 Có domain/URL → làm luôn: tạo thư mục `<site>/` → bắt traffic + đọc HAR (REA) → xuất & đọc bundle tìm cơ chế ký+mã hoá rồi verify bằng Python → xử anti-bot (curl_cffi impersonate) + captcha → ráp `cli.py` login+gọi API thật chạy pass ổn định. Tới bước cần account/OTP/proxy/captcha key → dừng hỏi đúng thứ đang thiếu. Chưa có domain → hỏi 1 câu lấy URL site (+ account test nếu có).

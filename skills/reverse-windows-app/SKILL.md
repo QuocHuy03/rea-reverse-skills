@@ -116,5 +116,10 @@ Thành phẩm là **1 CLI chạy ổn định**, không DB/không web UI:
 ## Trước khi commit
 `.gitignore` che: `*/bin/`, `*.exe`, `*.dll`, `*.so`, `session.json`, `.env`, `*/captured/`, `*/frida/*.log`, credential. **KHÔNG commit binary bản quyền**. Grep sạch license key / token / account thật. Chỉ `git add` file cụ thể.
 
+## Repo tham khảo (bổ trợ REA — xem `docs/references.md`)
+- **Native**: [x64dbg](https://github.com/x64dbg/x64dbg) (debug/unpack), [horsicq/Detect-It-Easy](https://github.com/horsicq/Detect-It-Easy) (nhận diện packer), [ergrelet/unlicense](https://github.com/ergrelet/unlicense) (unpack Themida/WinLicense), [hasherezade/pe-bear](https://github.com/hasherezade/pe-bear), [angr/angr](https://github.com/angr/angr). ⚠️ VMProtect không có unpacker mở ổn định — thành thật với user.
+- **.NET**: [dnSpyEx/dnSpy](https://github.com/dnSpyEx/dnSpy) (decompile+debug), [de4dot](https://github.com/de4dot/de4dot) / [NETReactorSlayer](https://github.com/SychicBoy/NETReactorSlayer) (deobfuscate).
+- **Electron/JS**: [j4k0xb/webcrack](https://github.com/j4k0xb/webcrack) (unpack bundle), [pionxzh/wakaru](https://github.com/pionxzh/wakaru) (unminify), [jehna/humanify](https://github.com/jehna/humanify) (đổi tên biến bằng LLM), [rarecoil/unwebpack-sourcemap](https://github.com/rarecoil/unwebpack-sourcemap) (check sourcemap trước).
+
 ## Bắt đầu
 Có app → **nhận diện runtime trước** (bước 0) → đi đúng nhánh A/B/C decompile bằng REA → bắt API → tìm cơ chế ký+mã hoá rồi verify bằng Python → ráp `cli.py` chạy pass ổn định. Chưa có app → hỏi 1 câu lấy tên app / file `.exe` / thư mục cài (+ account test nếu có).
