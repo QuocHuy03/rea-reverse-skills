@@ -19,9 +19,9 @@ Chỉ dừng hỏi khi gặp đúng tình huống thực sự cần con người
 
 Báo tiến độ ngắn khi xong mỗi mốc lớn: bắt được traffic → tìm ra cơ chế ký/mã hoá → dựng lại 1 API chạy `success` bằng Python → đọc đủ endpoint → sync+UI chạy.
 
-## Mục tiêu cuối: BỎ được emulator
+## Mục tiêu cuối: BỎ được emulator → còn 1 CLI
 
-Bắt traffic chỉ để **hiểu protocol**. Thành phẩm là **client Python tự tạo request** chạy độc lập. Nếu thuật toán ký nằm trong native `.so` không reverse nổi → fallback **Frida RPC**: giữ 1 instance chạy app, expose hàm ký qua `frida` RPC cho Python gọi — ghi rõ đây là fallback.
+Bắt traffic chỉ để **hiểu protocol**. Thành phẩm là **1 CLI Python** tự tạo request, chạy headless ổn định (bắt → giải → CLI pass là done). Không DB, không web UI. Nếu thuật toán ký nằm trong native `.so` không reverse nổi → fallback **Frida RPC**: giữ 1 instance chạy app, expose hàm ký qua `frida` RPC cho CLI gọi — ghi rõ đây là fallback.
 
 ## Môi trường (điền theo máy bạn — để dạng biến)
 
@@ -101,24 +101,25 @@ Kết hợp **traffic đã bắt** (header nào có, giá trị mẫu) + **code 
 5. **LUÔN verify thực nghiệm**: viết lại hàm ký bằng Python, tính sign cho 1 request đã capture → phải KHỚP y hệt giá trị app gửi, rồi mới gọi endpoint thật.
 6. Body/response mã hoá (AES phổ biến): tìm key+IV+mode → giải 1 response đã capture ra JSON hợp lệ bằng `pycryptodome` để verify. Protobuf → lấy `.proto` hoặc dựng field số.
 
-### 5. Dựng client Python
+### 5. Dựng CLI Python (thành phẩm cuối)
+Thành phẩm là **1 CLI chạy ổn định**, không DB/không web UI. Cấu trúc gọn:
+```
+<app>/                 # bỏ prefix package: com.company.app → app
+  client.py            # Client(): login, export/restore session, mỗi endpoint 1 method get_*/do_*
+  signer.py            # hàm sign() — verify KHỚP app
+  crypto_util.py       # encrypt_body / decrypt_resp
+  captcha_solver.py    # (nếu có captcha) — xem docs/captcha-solvers.md
+  cli.py               # entrypoint: argparse/typer; subcommand login / <action>; in JSON/plain; exit 0 khi pass
+  requirements.txt
+```
 - `curl_cffi impersonate` hoặc `requests`/`httpx`; set đúng `User-Agent` app + header cố định (app version, device model, `okhttp/x.y`).
-- **Device fingerprint**: `deviceId`/`androidId` phải ổn định theo account (lấy 1 lần từ máy ảo/traffic, cố định cho mỗi account — random mỗi call = bị bắt OTP lại).
-- `signer.py` (hàm `sign()` đã verify khớp app) + `crypto_util.py` (`encrypt_body`/`decrypt_resp`).
-- `client.py`: `login()`, export/restore session, mỗi endpoint 1 method `get_*` với docstring ghi quirk tại chỗ. Reuse session tránh login lại.
-- **Fallback Frida-RPC** khi ký ở native không reverse nổi.
+- **Device fingerprint**: `deviceId`/`androidId` phải ổn định theo account (lấy 1 lần từ máy ảo/traffic, cố định — random mỗi call = bị bắt OTP lại).
+- `signer.py` (verify khớp app) + `crypto_util.py`. `client.py` reuse session (lưu `session.json`) để khỏi login lại.
+- **CLI phải ổn định**: idempotent, có `--help`, tham số qua flag/env (không hardcode secret), retry/backoff khi lỗi mạng, exit code rõ (0 = pass, ≠0 = fail có message). Mục tiêu đúng như user cần: **bắt → giải → CLI chạy pass là done**.
+- **Fallback Frida-RPC** khi ký ở native không reverse nổi: giữ app chạy, CLI gọi hàm ký qua `frida` RPC.
 
-### 6. Đọc dữ liệu → sync DB → FastAPI → admin UI (3 tầng)
-```
-backend/<app>/   client.py signer.py crypto_util.py secret.py(Fernet) report.py sync.py
-backend/app/     FastAPI main.py + routers/ + scheduler.py + sync_runner.py
-backend/         auth.py(bcrypt+JWT) db.py(SQLite)
-admin/           React+TS+Vite dashboard → build ra backend/static/
-```
-UI KHÔNG gọi thẳng app gốc. Client → `sync.py` đọc hết → lưu `report_json` vào DB → admin đọc DB qua FastAPI. Bỏ prefix package khi đặt tên (`com.company.app` → `app`).
-
-### 7. Trước khi commit
-`.gitignore` che: `data.db`, `.jwt_secret`, `.<app>_secret`, `*/apk/`, `*/captured/`, `*/frida/*.log`, `proxies.txt`, `session.json`, `accounts.txt`. **KHÔNG commit APK** (bản quyền + nặng). Grep sạch credential/proxy/device-id/token thật. Chỉ `git add` file cụ thể.
+### 6. Trước khi commit
+`.gitignore` che: `*/apk/`, `*.apk`, `session.json`, `.env`, `*/frida/*.log`, `proxies.txt`, `accounts.txt`, `__pycache__/`. **KHÔNG commit APK** (bản quyền + nặng). Grep sạch credential/proxy/device-id/token/API key thật. Chỉ `git add` file cụ thể.
 
 ## Bắt đầu
-Có app → làm luôn: tạo `backend/<app>/` → chuẩn bị thiết bị → lấy & decompile APK (REA) → bắt traffic + CA system store, pin thì Frida → **tìm cơ chế ký + mã hoá rồi verify bằng Python** → dựng client → đọc đủ endpoint → sync+API+UI. Chưa có app → hỏi đúng 1 câu lấy tên app / package / file APK (+ account test nếu có).
+Có app → làm luôn: tạo thư mục `<app>/` → chuẩn bị thiết bị → lấy & decompile APK (REA) → bắt traffic + CA system store, pin thì Frida → **tìm cơ chế ký + mã hoá rồi verify bằng Python** → dựng `client.py`+`signer.py` → ráp `cli.py` chạy pass ổn định. Chưa có app → hỏi đúng 1 câu lấy tên app / package / file APK (+ account test nếu có).

@@ -13,9 +13,9 @@ User đưa domain rồi mong bạn tự chạy hết — bắt traffic, đọc b
 
 Báo tiến độ ngắn khi xong mỗi mốc: bắt được traffic → tìm cơ chế ký/mã hoá → login+1 API chạy `success` bằng Python → đọc đủ endpoint → sync+UI chạy.
 
-## Mục tiêu cuối: client Python chạy headless
+## Mục tiêu cuối: 1 CLI chạy headless ổn định
 
-Browser chỉ để **hiểu protocol**. Thành phẩm là client tự tạo request từ đầu, không cần mở browser. Nếu 1 bước buộc phải chạy JS trong browser (vd sinh token anti-bot bằng WASM) → fallback dùng browser automation (Playwright CDP) chỉ cho đúng bước đó, lấy token rồi đưa về client — ghi rõ là fallback.
+Browser chỉ để **hiểu protocol**. Thành phẩm là **1 CLI Python** tự tạo request từ đầu, không cần mở browser, chạy pass ổn định (bắt → giải → CLI pass là done). Không DB, không web UI. Nếu 1 bước buộc phải chạy JS trong browser (vd sinh token anti-bot bằng WASM) → fallback browser automation (Playwright CDP) chỉ cho đúng bước đó, lấy token rồi đưa về CLI — ghi rõ là fallback.
 
 ## Môi trường (điền theo máy — để dạng biến/placeholder)
 ```bash
@@ -55,26 +55,27 @@ rea trace-web-module-imports / trace-web-source-location ...   # lần import/ v
 
 ### 3. Anti-bot & TLS fingerprint
 - Web soi **JA3/TLS fingerprint** + header order mạnh hơn mobile → dùng `curl_cffi` với `impersonate="chrome"` (hoặc bản khớp) thay vì `requests`. Giữ nguyên thứ tự + giá trị header như browser thật.
-- Captcha (reCAPTCHA/hCaptcha/Turnstile): cần API key giải (2captcha…) hoặc fallback browser. Hỏi user key nếu chưa có.
+- Captcha (reCAPTCHA/hCaptcha/Turnstile): giải qua dịch vụ (NextCaptcha / 2captcha / CapSolver / EzCaptcha / Capzy) — xem `docs/captcha-solvers.md` cho mẫu `captcha_solver.py` đa nhà cung cấp. Cần API key (hỏi user). Hoặc fallback browser.
 - Token anti-bot sinh bằng WASM/JS phức tạp → fallback Playwright chạy đúng đoạn sinh token, lấy ra rồi đưa về client.
 - Cookie/session flow: tái tạo đúng chuỗi (GET trang → set-cookie → login → token) — bỏ bước là bị chặn.
 
-### 4. Dựng client Python
-- `client.py`: `login()` (user/pass, hoặc OTP/email → cần user), export/restore session (cookie + token), mỗi endpoint 1 method `get_*`/`do_*` với docstring ghi quirk (GET/POST, field bao ngoài, param bắt buộc). Reuse session.
-- `signer.py` (hàm `sign()` verify khớp site) + `crypto_util.py` (`encrypt_body`/`decrypt_resp`). `captcha_solver.py` nếu có captcha.
-- Với site **tạo video/ảnh AI**: thêm luồng tự đăng ký account qua email, submit prompt/ảnh → poll task → tải kết quả.
-
-### 5. Đọc dữ liệu → sync DB → FastAPI → admin UI (3 tầng)
+### 4. Dựng CLI Python (thành phẩm cuối)
+Thành phẩm là **1 CLI chạy ổn định**, không DB/không web UI:
 ```
-backend/<site>/  client.py signer.py crypto_util.py captcha_solver.py secret.py(Fernet) report.py sync.py
-backend/app/     FastAPI main.py + routers/ (/api/* bcrypt+JWT; /check/accounts/* CRUD + sync) + scheduler.py + sync_runner.py
-backend/         auth.py db.py(SQLite)
-admin/           React+TS+Vite: list account (số dư/VIP/trạng thái/sync time), nút Đồng bộ / Đồng bộ tất cả, form thêm 1 + hàng loạt user|pass, modal chi tiết report_json → build ra backend/static/
+<site>/
+  client.py            # Client(): login (user/pass hoặc OTP/email), export/restore session (cookie+token), mỗi endpoint 1 method get_*/do_*
+  signer.py            # sign() — verify KHỚP site
+  crypto_util.py       # encrypt_body / decrypt_resp (CryptoJS → pycryptodome)
+  captcha_solver.py    # (nếu có captcha) — xem docs/captcha-solvers.md
+  cli.py               # entrypoint: argparse/typer; subcommand login / <action>; in JSON/plain; exit 0 khi pass
+  requirements.txt
 ```
-UI KHÔNG gọi thẳng site gốc. Client → `sync.py` (restore session → còn hạn thì bỏ login → build report → lưu `report_json`) → admin đọc DB qua FastAPI. `sync_runner.py` có `_run_lock` chống sync chồng + ThreadPool. `scheduler.py` auto-sync hẹn giờ.
+- `client.py` reuse session (lưu `session.json`) để khỏi login lại; docstring ghi quirk từng endpoint (GET/POST, field bao ngoài, param bắt buộc).
+- **CLI ổn định**: idempotent, `--help`, tham số qua flag/env (không hardcode secret/cookie), retry/backoff + refresh token khi hết hạn, exit code rõ (0 = pass). Đúng ý: **bắt → giải → CLI chạy pass là done**.
+- Với site **tạo video/ảnh AI**: subcommand tự đăng ký account qua email, submit prompt/ảnh → poll task → tải kết quả.
 
-### 6. Trước khi commit
-`.gitignore` che: `data.db`, `.jwt_secret`, `.<site>_secret`, `*/captured/`, `*.har`, `proxies.txt`, `session.json`, `accounts.txt`, `captcha_venv/`. Grep sạch credential/proxy/API key/token/cookie thật (kể cả default value trong UI). Chỉ `git add` file cụ thể, KHÔNG `git add -A` mù.
+### 5. Trước khi commit
+`.gitignore` che: `session.json`, `.env`, `*/captured/`, `*.har`, `proxies.txt`, `accounts.txt`, `__pycache__/`. Grep sạch credential/proxy/API key/token/cookie thật. Chỉ `git add` file cụ thể, KHÔNG `git add -A` mù.
 
 ## Bắt đầu
-Có domain/URL → làm luôn: tạo `backend/<site>/` → bắt traffic + đọc HAR (REA) → xuất & đọc bundle tìm cơ chế ký+mã hoá rồi verify bằng Python → xử anti-bot (curl_cffi impersonate) → dựng client login+gọi API thật → đọc đủ endpoint → sync+API+UI hiện dữ liệu. Tới bước cần account/OTP/proxy/captcha key → dừng hỏi đúng thứ đang thiếu. Chưa có domain → hỏi 1 câu lấy URL site (+ account test nếu có).
+Có domain/URL → làm luôn: tạo thư mục `<site>/` → bắt traffic + đọc HAR (REA) → xuất & đọc bundle tìm cơ chế ký+mã hoá rồi verify bằng Python → xử anti-bot (curl_cffi impersonate) + captcha → ráp `cli.py` login+gọi API thật chạy pass ổn định. Tới bước cần account/OTP/proxy/captcha key → dừng hỏi đúng thứ đang thiếu. Chưa có domain → hỏi 1 câu lấy URL site (+ account test nếu có).

@@ -1,8 +1,8 @@
 # rea-reverse-skills
 
-Bộ **Claude Code skills** để reverse-engineer **app Windows, app Android (mobile) và web app** — lấy protocol/API của phần mềm rồi dựng lại client + hệ thống quản lý. Lõi phân tích dùng [**REA**](https://github.com/morluto/rea) (`rea-agents`): decompile headless + đọc evidence có cấu trúc (JADX cho APK, Ghidra cho native, phân tích JS/Electron, bắt & đọc traffic).
+Bộ **Claude Code skills** để reverse-engineer **app Windows, app Android (mobile) và web app** — bắt & giải protocol/API của phần mềm rồi dựng lại thành **CLI Python chạy ổn định**. Lõi phân tích dùng [**REA**](https://github.com/morluto/rea) (`rea-agents`): decompile headless + đọc evidence có cấu trúc (JADX cho APK, Ghidra cho native, phân tích JS/Electron, bắt & đọc traffic).
 
-> Mục tiêu cuối của mọi skill: **bỏ được app gốc** — dựng client (thường là Python) tự tạo request từ đầu (tự ký, tự mã hoá), đồng bộ dữ liệu vào DB, lên API + dashboard. App/emulator/Frida chỉ là giàn giáo lúc reverse.
+> Mục tiêu cuối của mọi skill: **bỏ được app gốc** — một **CLI** (Python) tự tạo request từ đầu (tự ký, tự mã hoá, tự giải captcha), chạy headless, exit code rõ ràng, lặp lại ổn định. Không DB, không web dashboard. App/emulator/Frida chỉ là giàn giáo lúc reverse.
 
 ## Có gì trong repo
 
@@ -14,6 +14,7 @@ Bộ **Claude Code skills** để reverse-engineer **app Windows, app Android (m
 
 Tài liệu chung:
 - [`docs/rea-setup.md`](docs/rea-setup.md) — cài & cấu hình REA + các provider (Ghidra, JADX, JDK), portable.
+- [`docs/captcha-solvers.md`](docs/captcha-solvers.md) — giải captcha qua dịch vụ (NextCaptcha / 2captcha / CapSolver / EzCaptcha).
 
 ## Cài vào Claude Code
 

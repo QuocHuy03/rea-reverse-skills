@@ -13,9 +13,9 @@ User đưa app rồi mong bạn tự chạy hết — nhận diện runtime, dec
 
 Báo tiến độ ngắn khi xong mỗi mốc: nhận diện runtime → bắt được API/traffic → tìm ra cơ chế ký/mã hoá → dựng 1 request `success` bằng Python → đọc đủ endpoint → hệ thống chạy.
 
-## Mục tiêu cuối
+## Mục tiêu cuối: 1 CLI chạy ổn định
 
-Hiểu protocol để **dựng client độc lập** (Python) tự gọi API của backend app — bỏ được app gốc. Nếu app chỉ nói chuyện local/IPC (không có server) thì thành phẩm là automation điều khiển app, hoặc tái dựng logic offline.
+Hiểu protocol để dựng **1 CLI Python** tự gọi API của backend app, chạy headless ổn định (bắt → giải → CLI pass là done) — bỏ được app gốc. Không DB, không web UI. Nếu app chỉ nói chuyện local/IPC (không có server) thì CLI tái dựng logic offline, hoặc fallback Frida-RPC gọi hàm trong app đang chạy.
 
 ## Môi trường (điền theo máy — để dạng biến/placeholder)
 ```powershell
@@ -97,19 +97,24 @@ App desktop có thể nói HTTP(S), WebSocket, hoặc protocol nhị phân riên
 ## ⚠️ Cơ chế ký request & mã hoá — TRÁI TIM
 Giống mobile: kết hợp **traffic đã bắt** + **code từ REA**. Tìm hàm sinh header ký (`sign`/`token`/`nonce`/`ts`), thuật toán (HMAC/AES/MD5/SHA), key (string literal từ `inspect-managed-members` cho .NET / `search` cho native / grep cho Electron). **Khó đọc tĩnh → Frida hook hàm ký in input-trước-khi-hash + output**, so với request thật. **LUÔN verify**: viết lại bằng Python, tính sign cho 1 request đã capture → khớp y hệt rồi mới gọi thật. Body mã hoá → giải 1 response đã capture ra JSON hợp lệ để verify key/IV/mode.
 
-## Dựng client Python → sync DB → FastAPI → admin UI (3 tầng)
+## Dựng CLI Python (thành phẩm cuối)
+Thành phẩm là **1 CLI chạy ổn định**, không DB/không web UI:
 ```
-backend/<app>/   client.py signer.py crypto_util.py secret.py(Fernet) report.py sync.py
-backend/app/     FastAPI main.py + routers/ + scheduler.py + sync_runner.py
-backend/         auth.py(bcrypt+JWT) db.py(SQLite)
-admin/           React+TS+Vite dashboard → build ra backend/static/
+<app>/
+  client.py            # Client(): login, export/restore session, mỗi endpoint 1 method get_*/do_*
+  signer.py            # sign() — verify KHỚP app
+  crypto_util.py       # encrypt_body / decrypt_resp
+  captcha_solver.py    # (nếu có captcha) — xem docs/captcha-solvers.md
+  cli.py               # entrypoint: argparse/typer; in JSON/plain; exit 0 khi pass
+  requirements.txt
 ```
 - `curl_cffi impersonate` hoặc `requests`/`httpx`; set đúng `User-Agent` của app + header cố định (app version, machine/device id ổn định theo account).
-- `signer.py` (verify khớp app), `crypto_util.py`, `client.py` (login + export/restore session + 1 method `get_*`/endpoint, docstring ghi quirk). UI không gọi thẳng app gốc — qua DB.
-- Không có server (app offline/IPC) → thành phẩm là automation (Frida RPC gọi hàm app, hoặc tái dựng logic offline bằng Python).
+- `signer.py` (verify khớp app), `crypto_util.py`, `client.py` (login + export/restore session + 1 method/endpoint, docstring ghi quirk).
+- **CLI ổn định**: idempotent, `--help`, tham số qua flag/env (không hardcode secret), retry/backoff, exit code rõ (0 = pass).
+- Không có server (app offline/IPC) → CLI tái dựng logic offline, hoặc fallback **Frida-RPC** gọi hàm trong app đang chạy.
 
 ## Trước khi commit
-`.gitignore` che: `data.db`, `.jwt_secret`, `.<app>_secret`, `*/bin/`, `*/captured/`, `*.exe`, `*.dll`, `*/frida/*.log`, credential. **KHÔNG commit binary bản quyền**. Grep sạch license key / token / account thật. Chỉ `git add` file cụ thể.
+`.gitignore` che: `*/bin/`, `*.exe`, `*.dll`, `*.so`, `session.json`, `.env`, `*/captured/`, `*/frida/*.log`, credential. **KHÔNG commit binary bản quyền**. Grep sạch license key / token / account thật. Chỉ `git add` file cụ thể.
 
 ## Bắt đầu
-Có app → **nhận diện runtime trước** (bước 0) → đi đúng nhánh A/B/C decompile bằng REA → bắt API → tìm cơ chế ký+mã hoá rồi verify bằng Python → dựng client → đọc đủ endpoint → sync+API+UI. Chưa có app → hỏi 1 câu lấy tên app / file `.exe` / thư mục cài (+ account test nếu có).
+Có app → **nhận diện runtime trước** (bước 0) → đi đúng nhánh A/B/C decompile bằng REA → bắt API → tìm cơ chế ký+mã hoá rồi verify bằng Python → ráp `cli.py` chạy pass ổn định. Chưa có app → hỏi 1 câu lấy tên app / file `.exe` / thư mục cài (+ account test nếu có).
