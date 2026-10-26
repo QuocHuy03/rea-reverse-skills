@@ -33,7 +33,7 @@ ADB="<đường dẫn adb>"                               # adb của emulator h
 # frida-server KHỚP version `frida --version` và đúng ABI (x86_64 cho LDPlayer; arm64 cho thiết bị thật)
 FSRV="<đường dẫn frida-server khớp version/ABI>"
 ```
-⚠️ Nếu máy có nhiều JDK (vd Java 8 của tool khác ở `JAVA_HOME`), đảm bảo công cụ cần Java 21 (jadx/REA) gọi đúng JDK — REA đọc `JAVA_HOME` của nó từ registration (xem `docs/rea-setup.md`).
+⚠️ Nếu máy có nhiều JDK (vd Java 8 của tool khác ở `JAVA_HOME`), đảm bảo công cụ cần Java 21 (jadx/REA) gọi đúng JDK — REA đọc `JAVA_HOME` của nó từ registration (xem [rea-setup](https://github.com/QuocHuy03/rea-reverse-skills/blob/main/docs/rea-setup.md)).
 
 ---
 
@@ -108,7 +108,7 @@ Thành phẩm là **1 CLI chạy ổn định**, không DB/không web UI. Cấu 
   client.py            # Client(): login, export/restore session, mỗi endpoint 1 method get_*/do_*
   signer.py            # hàm sign() — verify KHỚP app
   crypto_util.py       # encrypt_body / decrypt_resp
-  captcha_solver.py    # (nếu có captcha) — xem docs/captcha-solvers.md
+  captcha_solver.py    # (nếu có captcha) — xem https://github.com/QuocHuy03/rea-reverse-skills/blob/main/docs/captcha-solvers.md
   cli.py               # entrypoint: argparse/typer; subcommand login / <action>; in JSON/plain; exit 0 khi pass
   requirements.txt
 ```
@@ -121,10 +121,10 @@ Thành phẩm là **1 CLI chạy ổn định**, không DB/không web UI. Cấu 
 ### 6. Trước khi commit
 `.gitignore` che: `*/apk/`, `*.apk`, `session.json`, `.env`, `*/frida/*.log`, `proxies.txt`, `accounts.txt`, `__pycache__/`. **KHÔNG commit APK** (bản quyền + nặng). Grep sạch credential/proxy/device-id/token/API key thật. Chỉ `git add` file cụ thể.
 
-## Repo tham khảo (bổ trợ REA — xem `docs/references.md`)
+## Repo tham khảo (bổ trợ REA — xem [references](https://github.com/QuocHuy03/rea-reverse-skills/blob/main/docs/references.md))
 - **Unpin/Frida**: [httptoolkit/frida-interception-and-unpinning](https://github.com/httptoolkit/frida-interception-and-unpinning) (bộ tốt nhất, kèm anti-Frida/anti-root), [sensepost/objection](https://github.com/sensepost/objection) (`sslpinning disable` 1 lệnh). Flutter: [NVISOsecurity/disable-flutter-tls-verification](https://github.com/NVISOsecurity/disable-flutter-tls-verification), [Impact-I/reFlutter](https://github.com/Impact-I/reFlutter). No-root: [shroudedcode/apk-mitm](https://github.com/shroudedcode/apk-mitm).
 - **Tooling**: [iBotPeaches/Apktool](https://github.com/iBotPeaches/Apktool) (patch/rebuild), [Ch0pin/medusa](https://github.com/Ch0pin/medusa) / [nccgroup/house](https://github.com/nccgroup/house) (hook động), [MobSF](https://github.com/MobSF/Mobile-Security-Framework-MobSF).
-- **Captcha**: `docs/captcha-solvers.md`. **Phương pháp chuẩn**: [OWASP/owasp-mastg](https://github.com/OWASP/owasp-mastg).
+- **Captcha**: [captcha-solvers](https://github.com/QuocHuy03/rea-reverse-skills/blob/main/docs/captcha-solvers.md). **Phương pháp chuẩn**: [OWASP/owasp-mastg](https://github.com/OWASP/owasp-mastg).
 
 ## Bắt đầu
 Có app → làm luôn: tạo thư mục `<app>/` → chuẩn bị thiết bị → lấy & decompile APK (REA) → bắt traffic + CA system store, pin thì Frida → **tìm cơ chế ký + mã hoá rồi verify bằng Python** → dựng `client.py`+`signer.py` → ráp `cli.py` chạy pass ổn định. Chưa có app → hỏi đúng 1 câu lấy tên app / package / file APK (+ account test nếu có).

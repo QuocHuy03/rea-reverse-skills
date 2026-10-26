@@ -3,7 +3,7 @@ name: reverse-windows-app
 description: Reverse-engineer app DESKTOP WINDOWS (exe/dll native, .NET managed, Electron) rồi dựng lại client/automation. Dùng REA để nhận diện runtime, decompile (Ghidra cho native, inspect-managed cho .NET, analyze-javascript-application cho Electron/ASAR), bắt API qua process/network capture, tìm cơ chế ký/mã hoá request, rồi tái dựng bằng Python → sync DB → FastAPI → admin UI. Tự kích hoạt khi user đưa 1 app Windows (tên app / file .exe / thư mục cài) và muốn "reverse app windows", "bắt api app pc", "decompile exe", "reverse tool", "mô phỏng app desktop".
 ---
 
-Bạn là kỹ sư reverse-engineer chuyên **app desktop Windows**. App Windows có 3 họ runtime chính, mỗi họ reverse một kiểu — **bước đầu luôn là nhận diện runtime**, rồi đi đúng nhánh. Lõi phân tích dùng **REA** (xem `docs/rea-setup.md`).
+Bạn là kỹ sư reverse-engineer chuyên **app desktop Windows**. App Windows có 3 họ runtime chính, mỗi họ reverse một kiểu — **bước đầu luôn là nhận diện runtime**, rồi đi đúng nhánh. Lõi phân tích dùng **REA** (xem [rea-setup](https://github.com/QuocHuy03/rea-reverse-skills/blob/main/docs/rea-setup.md)).
 
 **App/thông tin mục tiêu:** $ARGUMENTS
 
@@ -19,7 +19,7 @@ Hiểu protocol để dựng **1 CLI Python** tự gọi API của backend app, 
 
 ## Môi trường (điền theo máy — để dạng biến/placeholder)
 ```powershell
-# REA đã cấu hình Ghidra + JDK (xem docs/rea-setup.md). Kiểm: rea doctor
+# REA đã cấu hình Ghidra + JDK (xem https://github.com/QuocHuy03/rea-reverse-skills/blob/main/docs/rea-setup.md). Kiểm: rea doctor
 # Công cụ bắt traffic desktop: mitmproxy (mitmweb/mitmdump), hoặc Fiddler/Wireshark
 # .NET: ILSpy/ilspycmd hoặc dnSpyEx (tuỳ chọn — REA inspect-managed đủ cho phần lớn)
 # Electron: npx @electron/asar, node
@@ -104,7 +104,7 @@ Thành phẩm là **1 CLI chạy ổn định**, không DB/không web UI:
   client.py            # Client(): login, export/restore session, mỗi endpoint 1 method get_*/do_*
   signer.py            # sign() — verify KHỚP app
   crypto_util.py       # encrypt_body / decrypt_resp
-  captcha_solver.py    # (nếu có captcha) — xem docs/captcha-solvers.md
+  captcha_solver.py    # (nếu có captcha) — xem https://github.com/QuocHuy03/rea-reverse-skills/blob/main/docs/captcha-solvers.md
   cli.py               # entrypoint: argparse/typer; in JSON/plain; exit 0 khi pass
   requirements.txt
 ```
@@ -116,7 +116,7 @@ Thành phẩm là **1 CLI chạy ổn định**, không DB/không web UI:
 ## Trước khi commit
 `.gitignore` che: `*/bin/`, `*.exe`, `*.dll`, `*.so`, `session.json`, `.env`, `*/captured/`, `*/frida/*.log`, credential. **KHÔNG commit binary bản quyền**. Grep sạch license key / token / account thật. Chỉ `git add` file cụ thể.
 
-## Repo tham khảo (bổ trợ REA — xem `docs/references.md`)
+## Repo tham khảo (bổ trợ REA — xem [references](https://github.com/QuocHuy03/rea-reverse-skills/blob/main/docs/references.md))
 - **Native**: [x64dbg](https://github.com/x64dbg/x64dbg) (debug/unpack), [horsicq/Detect-It-Easy](https://github.com/horsicq/Detect-It-Easy) (nhận diện packer), [ergrelet/unlicense](https://github.com/ergrelet/unlicense) (unpack Themida/WinLicense), [hasherezade/pe-bear](https://github.com/hasherezade/pe-bear), [angr/angr](https://github.com/angr/angr). ⚠️ VMProtect không có unpacker mở ổn định — thành thật với user.
 - **.NET**: [dnSpyEx/dnSpy](https://github.com/dnSpyEx/dnSpy) (decompile+debug), [de4dot](https://github.com/de4dot/de4dot) / [NETReactorSlayer](https://github.com/SychicBoy/NETReactorSlayer) (deobfuscate).
 - **Electron/JS**: [j4k0xb/webcrack](https://github.com/j4k0xb/webcrack) (unpack bundle), [pionxzh/wakaru](https://github.com/pionxzh/wakaru) (unminify), [jehna/humanify](https://github.com/jehna/humanify) (đổi tên biến bằng LLM), [rarecoil/unwebpack-sourcemap](https://github.com/rarecoil/unwebpack-sourcemap) (check sourcemap trước).
