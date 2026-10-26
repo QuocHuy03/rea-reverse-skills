@@ -1,0 +1,41 @@
+# Thành phẩm reverse — KHÔNG bao giờ commit
+data.db
+*.db
+.jwt_secret
+.*_secret
+session.json
+accounts.txt
+proxies.txt
+
+# Binary/artifact bản quyền — không commit
+*/apk/
+*.apk
+*.xapk
+*.apks
+*.exe
+*.dll
+*.so
+*.asar
+
+# Capture / log
+*/captured/
+*.har
+*.saz
+*.pcap
+*.pcapng
+*/frida/*.log
+
+# Môi trường
+.env
+captcha_venv/
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
