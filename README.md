@@ -16,6 +16,7 @@ Tài liệu chung:
 - [`docs/rea-setup.md`](docs/rea-setup.md) — cài & cấu hình REA + các provider (Ghidra, JADX, JDK), portable.
 - [`docs/captcha-solvers.md`](docs/captcha-solvers.md) — giải captcha qua dịch vụ (NextCaptcha / 2captcha / CapSolver / EzCaptcha / Capzy).
 - [`docs/references.md`](docs/references.md) — repo & công cụ GitHub bổ trợ REA cho từng mảng (unpin/Frida, Ghidra, .NET, deobfuscate JS, anti-bot/TLS, captcha, awesome-lists).
+- [`docs/reverse-case-studies.md`](docs/reverse-case-studies.md) — **case reverse thật** (TikTok signer, instagrapi, librespot, WhatsApp, gpsoauth…) + kỹ thuật nặng (emulate `.so` bằng unidbg, IL2CPP, jnitrace) + **pattern chắt lọc** + bảng quyết định *emulate vs Frida-RPC vs viết lại*.
 
 ## Cài vào Claude Code
 
