@@ -17,6 +17,7 @@ Tài liệu chung:
 - [`docs/captcha-solvers.md`](docs/captcha-solvers.md) — giải captcha qua dịch vụ (NextCaptcha / 2captcha / CapSolver / EzCaptcha / Capzy).
 - [`docs/references.md`](docs/references.md) — repo & công cụ GitHub bổ trợ REA cho từng mảng (unpin/Frida, Ghidra, .NET, deobfuscate JS, anti-bot/TLS, captcha, awesome-lists).
 - [`docs/reverse-case-studies.md`](docs/reverse-case-studies.md) — **case reverse thật** (TikTok signer, instagrapi, librespot, WhatsApp, gpsoauth…) + kỹ thuật nặng (emulate `.so` bằng unidbg, IL2CPP, jnitrace) + **pattern chắt lọc** + bảng quyết định *emulate vs Frida-RPC vs viết lại*.
+- [`docs/china-re-arsenal.md`](docs/china-re-arsenal.md) — **kho vũ khí reverse Trung Hoa** (看雪/52pojie): 脱壳 unpack app 加固 (FRIDA-DEXDump/BlackDex/Youpk/FART), r0capture, 算法助手, reverse 微信小程序, 反检测, unidbg-server + **脱壳 workflow** đầy đủ.
 
 ## Cài vào Claude Code
 
