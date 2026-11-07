@@ -80,7 +80,7 @@ The signer `.so` is OLLVM/VMProtect'd (control-flow flattening, opaque predicate
 - **Frida-RPC (live on a real device):** when unidbg can't satisfy the env (missing JNI, syscall quirks), expose the native signer as an `rpc.exports` function on-device and call it from Python — `frida/rpc-signer.js`. Real device = all env checks pass naturally; the trade-off is you need the device online.
 - Serve either behind HTTP (`anjia0532/unidbg-boot-server`) so your Python client just POSTs inputs and gets the signature.
 
-The decision table (emulate vs RPC vs reimplement) and real worked cases (argus, SignerPy, instagrapi, gpsoauth) are in `docs/reverse-case-studies.md` and `docs/android-arsenal.md §4`.
+The decision table (emulate vs RPC vs reimplement) and real worked cases (argus, SignerPy, instagrapi, gpsoauth) are in `docs/reverse-case-studies.md` and `docs/android-arsenal.md §4`. **For the named hard families — argus/ladon protobuf, OLLVM/VMP, white-box, anti-tamper-bound key — with the exact blocker and move for each, see `docs/hard-sign-types.md`.**
 
 ---
 
