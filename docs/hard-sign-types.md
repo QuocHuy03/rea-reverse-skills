@@ -15,7 +15,7 @@
 **Move.**
 1. `jnitrace -l libXXX.so <pkg>` → find the JNI method, its exact arg list and return. You'll see something like `Argus.encrypt(int keyver, String url, byte[] data, long ts)` and, earlier, a one-time `Ladon.init(...)` / SDK `register`.
 2. **Oracle it, controlling the state yourself:**
-   - **unidbg (offline):** load the lib, call `JNI_OnLoad`, call the **init/register once**, then call the signer per request — you set the counter/timestamp explicitly so output is reproducible. This is exactly what `is-L7N/SignerPy` and `scrapguru/tiktok-argus-androidemu` do; use `unidbg/UnidbgOracleTemplate.java` as the base and add the init call + multi-arg signature.
+   - **unidbg (offline):** load the lib, call `JNI_OnLoad`, call the **init/register once**, then call the signer per request — you set the counter/timestamp explicitly so output is reproducible. This is exactly what `is-L7N/SignerPy` and `scrapguru/tiktok-argus-androidemu` do; use `unidbg/UnidbgOracleTemplate.java` as the base and add the init call + multi-arg signature. For an obfuscated signer, let the **unidbg MCP server** drive it (breakpoint → `mcp` → the AI traces the call and varies inputs via a custom tool to pin the state) — see `unidbg/README.md` → "Let the AI drive it". The Android-focused forks (`dqzg12300/unidbg` and similar) carry extra patches + sample signing tests if the upstream path fights you.
    - **Frida-RPC (live):** `rpc-signer.js` → call `init()` once, then `signNative(...)` per request; the on-device SDK keeps the counter for you. Simpler to stand up, needs the device online.
 3. **Verify across MANY requests** with `scripts/verify-signer.py` — a single match can hide a wrong counter; several in a row proves the state handling.
 
@@ -30,6 +30,7 @@
 **Move.** **Don't deobfuscate.**
 - **Preferred — oracle it** (unidbg/RPC). Obfuscation protects the *code*; it does nothing against *running* the code with your inputs.
 - **If you truly must reimplement in pure Python** (no device at runtime): trace **one** call — unidbg `emulator.getBackend().traceCode()` or Frida **Stalker** over the single signing invocation — and watch the data transform. Control-flow flattening hides the *shape*, but the *data-flow* is often a plain keystream or standard hash once unrolled. For the strings: set a breakpoint right after each decrypt stub and read the plaintext string out of the register/buffer (same trick beats Virbox/whitebox string protection).
+- **Deflattening tooling (when you must recover the real CFG, not just one trace):** the established method is **emulate-and-record** — drive the flattened function in **Unicorn**, log the real jump targets at each dispatch (track the `ZF`/flags, since the conditional dispatch depends on them), and rebuild the block order; pair with IDA/Ghidra block extraction. For the other OLLVM passes, **`joydo/d810`** (a Hex-Rays decompiler plugin) handles instruction substitution and opaque predicates, and **GAMBA**-class MBA simplifiers undo mixed boolean-arithmetic. Academic baseline: the *DiANa* paper ("Automated Deobfuscation of Android Native Binary Code", arXiv 1907.06828) — taint analysis + symbolic execution to recover O-LLVM'd ARM CFGs. In practice, oracling still beats deflattening unless you specifically need the algorithm in pure Python.
 
 ---
 
@@ -39,7 +40,12 @@
 
 **Blockers.** There is nothing to steal: no `SecretKeySpec`, no key arg, no key in `.rodata` you can use directly.
 
-**Move.** **Oracle only** (unidbg/RPC) — the oracle reproduces the function perfectly without ever naming the key. Extracting the key from a white-box is a **research-grade attack** (differential fault analysis / differential computation analysis); skip it unless breaking the white-box *is* the job. 99% of the time the oracle is the answer and the key is irrelevant.
+**Move.** **Oracle only** (unidbg/RPC) — the oracle reproduces the function perfectly without ever naming the key. 99% of the time this is the answer and the key is irrelevant.
+
+If extracting the key truly *is* the job, it's a known research attack with public tooling — **don't hand-roll it:**
+- **DCA (differential computation analysis)** — the automated counterpart of power analysis. **`SideChannelMarvels/Deadpool`** drives it: record execution traces of the white-box with `SideChannelMarvels/Tracer` (DBI — a Frida/PIN/Unicorn tracer), then run the correlation attack with `SideChannelMarvels/Daredevil`. It has a worked ARM/ARM64 AES-128-in-an-Android-app entry. This recovers the key from many table-based white-boxes without understanding the tables.
+- **DFA (differential fault analysis)** — inject faults in the penultimate AES round and solve: **`SideChannelMarvels/JeanGrey`** / its `phoenixAES` recovers the key from faulted ciphertext pairs.
+- Reach for these only when you must run the signer *without* the app at all (pure offline reimpl) and the oracle route is closed; otherwise the oracle wins on effort.
 
 ---
 
@@ -66,6 +72,8 @@
 - **Keystore signing:** Frida-RPC the signing call on a **real device** — the TEE performs the operation, you just invoke it with your data (`rpc-signer.js`, point it at the keystore-signing method). The key stays in the TEE; you get valid signatures.
 - **Play Integrity / DroidGuard token:** must originate from a **real, certified device**; the token is server-validated and droidguard runs are attested. Automation means a real device in the loop or accepting the ceiling.
 - **Request-body RSA with an embedded PUBLIC key** (common and *easy* — don't confuse it with the above): just reimplement with that public key in Python, no device needed.
+
+**Know the current ceiling (as of 2026) before you waste days:** Google raised the bar for the strongest verdict — `MEETS_STRONG_INTEGRITY` now requires a hardware-backed keystore **and a security update within the last year** on Android 13+ (announced late 2024, ~14.5% drop in strong responses). `chiteroman/PlayIntegrityFix` and keybox-spoofing modules reach at most **`MEETS_DEVICE_INTEGRITY`**, and only while the embedded keybox stays unrevoked — Google rotates/revokes keyboxes, so these break without warning (a 2026 root-CA rotation was widely expected to kill RSA-2048 keybox bypasses). **If the server only trusts STRONG, an unlocked/rooted/emulated client cannot pass it — that's the model working.** The realistic levers: a genuinely certified physical device in the loop, or (server-side, if it's your target to analyze, not to defeat) note that many apps still gate on DEVICE-level or only check STRONG on pre-Android-13 — which a DEVICE-level pass covers.
 
 ---
 

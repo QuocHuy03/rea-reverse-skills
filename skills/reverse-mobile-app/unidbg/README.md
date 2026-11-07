@@ -33,6 +33,15 @@ native-signer path in `docs/android-arsenal.md` §4. unidbg = `zhkl0228/unidbg`.
 2. Fill the template, run it on a captured blob → expect valid JSON plaintext (decrypt) or the exact bytes the app sent (encrypt/sign — verify byte-for-byte).
 3. Turn it into a service for your Python CLI: wrap `decrypt()`/`sign()` in an HTTP endpoint (`anjia0532/unidbg-boot-server` does this with Spring-Boot), so `client.py` POSTs params and gets the result. Live-device alternative: `frida/rpc-signer.js`.
 
+## Let the AI drive it — unidbg MCP (self-solve a signer autonomously)
+
+Recent `zhkl0228/unidbg` ships an **MCP server** so an AI agent can debug the emulated lib itself instead of you hand-editing the template each round:
+
+- **Breakpoint mode:** set a breakpoint, run; when it fires the emulator pauses and you type `mcp` (or `mcp 9239` to pick a port) in the console → it starts an MCP server. Wire that port into your MCP client (Cursor etc.). The agent then gets tools to read registers/memory, disassemble, single-step, and trace — so it can *walk the signer live* and report how the canonical string is built, with no source reading.
+- **Custom-tools mode:** register your own tools via `McpToolkit` (e.g. "sign(url, body, ts)") → the agent can **re-run the target function with different inputs and compare outputs** without restarting the process, set breakpoints/traces before each call, and diff the results. This is exactly the loop for cracking a **stateful** signer (vary ts/counter, watch the output) or confirming which input feeds the hash.
+
+Practical loop for autonomous solving: template loads the lib + `JNI_OnLoad` → breakpoint at the signer entry → `mcp` → the agent traces one call, identifies the pre-hash bytes / key, varies inputs via a custom tool to confirm, then emits the Python reimplementation (or keeps unidbg as the oracle). Pair with `scripts/verify-signer.py` to prove the result byte-for-byte.
+
 ## Common failures & fixes
 
 - **`UnsatisfiedLinkError` / method not found** → `JNI_OnLoad` didn't register it, or wrong signature. Keep `vm.setVerbose(true)` and read the printed `RegisterNatives` list; copy the exact signature.
