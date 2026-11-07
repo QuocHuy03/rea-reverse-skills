@@ -1,0 +1,5 @@
+# fridacap capture outputs (local only)
+cap/
+*-out/
+fridacap-*/
+*.ndjson

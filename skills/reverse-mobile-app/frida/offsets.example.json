@@ -1,0 +1,7 @@
+{
+  "_comment": "Hook stripped/static BoringSSL (libcronet, libflutter) by raw address. Keys are module names as they appear in Process.enumerateModules() (match the versioned name on the device, e.g. libcronet.117.0.5938.0.so). 'addr' is an offset from the module base (absolute:false) or a runtime VA (absolute:true). Produce these with REA — see README 'offsets via REA'. Pass with: fridacap.py --offsets offsets.json",
+  "libcronet.117.0.5938.0.so": {
+    "SSL_read":  { "addr": "0x4a1b20", "absolute": false },
+    "SSL_write": { "addr": "0x4a1e40", "absolute": false }
+  }
+}

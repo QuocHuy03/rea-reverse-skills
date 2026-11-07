@@ -1,11 +1,134 @@
 # Frida scripts
 
-- **ssl-unpin.js** — universal SSL pinning bypass. Java layer (TrustManager, HostnameVerifier, OkHttp `CertificatePinner` including obfuscated builds, Conscrypt) + native BoringSSL (`SSL_[CTX_]set_custom_verify`), with `android_dlopen_ext`/`dlopen` hooks to catch late-loaded `.so`s (spawn mode) and a fallback polling loop.
+- **ssl-unpin.js** — universal SSL pinning bypass. Java layer (TrustManager, HostnameVerifier, OkHttp `CertificatePinner` incl. `check$okhttp` + obfuscated builds, Conscrypt, **TrustKit**, **Cronet builder pins** `addPublicKeyPins`/`enablePublicKeyPinningBypassForLocalTrustAnchors`, **WebView** `onReceivedSslError`) + native: it **probes every crypto module** for the whole verify surface — BoringSSL `SSL_[CTX_]set_custom_verify`, `SSL_CTX_set_cert_verify_callback`, classic `SSL[_CTX]_set_verify` (forced `SSL_VERIFY_NONE`), and `X509_verify_cert` / `SSL_get_verify_result` return-overrides — so forks like TikTok/Douyin's `libttboringssl.so` and old-OpenSSL libs are covered, not just modern BoringSSL. Plus **Proxygen** for Meta apps (FB/IG/Messenger) (`verifyWithMetrics` / `verifySSLCertificate` force-true, `setVerifyCertificates` force-off) across app-private libs under `/data`. Rescans on `android_dlopen_ext`/`dlopen` for late-loaded `.so`s (spawn mode) plus a fallback polling loop.
+- **anti-detect.js** — blunt **anti-Frida-detection** helper for when an app exits/crashes the moment you attach. Three toggleable layers: (1) libc `strstr`/`strcasestr`/`memmem` return "not found" when the needle is a Frida signature (`frida`, `gum-js`, `frida-agent`, `pool-frida`, `gmain`/`gdbus`, `:rpc`, `27042/3`) — one hook that defeats the common pattern of reading `/proc/self/maps` \| `/proc/<pid>/fd` \| `/proc/<pid>/task/<tid>/comm` then string-scanning it; (2) `ptrace(PTRACE_TRACEME)` neutralized so init-time self-ptrace anti-debug can't lock out attach; (3) a behaviour-neutral logger that prints sensitive `/proc` opens (`maps`/`status`/`task`/`net/tcp`) so you can see **which** vector fired. Load it first, in spawn mode: `frida -U -f <pkg> -l anti-detect.js -l ssl-unpin.js --no-pause`. Not a cloak — raw-syscall `/proc` reads, `strcmp`-based scans, and CRC/inline-hook checks slip past; for those, find the detector statically (REA) and patch it. See **Anti-Frida detection** below.
+- **capture-http.js** — dump **raw plaintext HTTP(S)** by hooking the TLS plaintext path (no proxy, no CA, works through pinning — bytes are read inside the process). Shows requests before encryption (`>>>`) and responses after decryption (`<<<`). Hooks **two paths**, which together cover the vast majority of Android apps:
+  - **BoringSSL `SSL_write`/`SSL_read`** — native OkHttp, cronet, Flutter, Meta `libcoldstart`, old-Android Play Store.
+  - **Conscrypt `ENGINE_SSL_{read,write}_direct`** — the Java TLS path behind `HttpsURLConnection`/OkHttp on modern Android, which does **not** call `SSL_read`/`SSL_write` (this was the big miss — most Java apps use it).
+  It **auto-probes every loaded module** for these symbols (no hard-coded library list), catching renamed/bundled BoringSSL too, and re-probes crypto libs on each `dlopen`/poll until late `.symtab` symbols resolve. For **stripped/static BoringSSL** (libcronet, libflutter) that has *no* `SSL_read`/`SSL_write` exports, the host can pass **`offsets`** (base+offset found by static analysis — the reliable path, see *offsets via REA* below) and/or **`patterns`** (prologue byte-signatures `Memory.scan`'d over the module's r-x ranges — fallback, build/arch specific) via `rpc.configure`; both install the same plaintext hook by raw address. Has a `console` mode (standalone `frida -l`) and a structured `send` mode (binary events → NDJSON via **fridacap.py**). Live-verified on a Frida-17 Android-14 AVD: auto-hooked `libssl.so` + Conscrypt in `libjavacrypto.so` and captured real `GET https://www.google.com/generate_204` through the Java TLS stack; earlier on Android 9 captured Play Store's `GET /play/log/timestamp` + decrypted `200 OK` (incl. `Set-Cookie`). Limit: **QUIC/HTTP3 plaintext never touches `SSL_read`/`SSL_write`** (see notes below), so offsets/patterns only recover a stripped lib's **TLS-over-TCP** traffic — block UDP/443 first to force QUIC apps down to TCP.
+- **fridacap.py** — host-side harness for capturing at scale across many apps/sites. Loads `capture-http.js` in `send` mode and writes one NDJSON record per HTTP request/response (method, URL, host, headers, **body**, pid, timestamp). Parses **HTTP/1.1 and HTTP/2** (reassembles h2 frames + HPACK-decodes HEADERS → readable method/path/authority **and reassembles DATA frames → the request/response body**, so you recover the actual POST/JSON payload, not just the URL; needs `pip install hpack hyperframe`), decodes gzip bodies, caps each body at 256 KB (`body_cut: true` when truncated), flushes in-flight streams at shutdown, and filters by host (`--include`/`--exclude`). Modes: `--spawn <pkg>`, `--attach <name|pid>`, `--attach-all` (every **app** process — system/zygote procs are skipped so the device stays alive), optional `--follow`, `--raw` (dump per-connection byte streams). e.g. `python fridacap.py --device emulator-5584 --attach <pid> --include googleapis.com --seconds 45 --out cap`. For **stripped BoringSSL** apps (libcronet/libflutter), add **`--offsets offsets.json`** (base+offset from REA — see `offsets.example.json` + *offsets via REA* below) and/or **`--patterns patterns.json`** (prologue byte-signatures); the harness forwards them to the agent's `configure()` so it hooks `SSL_read`/`SSL_write` by raw address. Live-verified twice: (1) Wikipedia (F-Droid) HTTP/2 decoded to `GET https://upload.wikimedia.org/wikipedia/commons/.../Linus_Torvalds.jpg?...`; (2) NewPipe's real InnerTube API with full bodies — `POST https://youtubei.googleapis.com/youtubei/v1/player` + `/visitor_id` + `/reel/reel_item_watch` with the decoded JSON `context.client` (`clientName: ANDROID`, `clientVersion`, `visitorData`) and signed `videoplayback` URLs — i.e. everything needed to replay the signed calls. **Attach after the target process is already running** (`--attach-all` snapshots current processes; app launches are zygote-forks that `--follow` spawn-gating does not catch), and HPACK/body reassembly needs connections opened *after* attach (stateful dynamic table).
 - **dump-signer.js** — TEMPLATE hook for the request-signing function to reveal the input string + output. Edit `TARGET_CLASS`/`TARGET_METHOD` to match the class you found with REA.
 - **rpc-signer.js** — FALLBACK: expose the app's signing function over Frida RPC so a Python CLI can call it as an oracle. Use only when the signer is in a native `.so` you can't reimplement or emulate (unidbg).
 
 Further reference techniques:
-- `dlopen` timing + scanning for obfuscated OkHttp classes: learned from [danieldev23/frida-ssl-bypass](https://github.com/danieldev23/frida-ssl-bypass).
-- When stuck, pair it with stronger community builds: [frida-multiple-unpinning](https://codeshare.frida.re/@akabe1/frida-multiple-unpinning/), or `objection android sslpinning disable`.
+- `dlopen` timing + scanning for obfuscated OkHttp classes, and the Proxygen/`libcoldstart.so` bypass for Meta apps: learned from danieldev23/frida-ssl-bypass (`fb4a_bypass.js`).
+- When stuck, pair it with stronger community builds: frida-multiple-unpinning, or `objection android sslpinning disable`.
+
+Compatibility: **Frida 17** removed the static `Module.findExportByName(name,…)` / `Module.enumerateSymbols(name)` forms — `ssl-unpin.js` now resolves per-module (`Process.findModuleByName(...).findExportByName/enumerateSymbols`) with a legacy fallback, so it runs on both 16 and 17. Run it via the **frida CLI** (`frida -U -f <pkg> -l ssl-unpin.js --no-pause`), which injects the `Java`/`ObjC` bridges; a raw `session.create_script()` from frida-python 17 does **not** provide `Java`, so the Java layer would be skipped.
+
+Live-tested on an x86_64 Android (LDPlayer, frida-server 17.17.0): the native layer neutralizes `libssl.so` and catches late-loaded `libmonochrome.so` via `dlopen`; the Proxygen path is a no-op (graceful) on non-Meta apps. The Proxygen symbol-match itself still needs a real Meta app to confirm, and on a stripped `libcoldstart.so` falls back to the "no symbols" notice (would need a per-build pattern scan).
+
+## Operational notes — capturing at scale (hard-won on a live AVD)
+
+These decide whether you actually see traffic, especially on modern Android:
+
+- **Emulator choice.** Native `SSL_*` hooks need the ABI to match the app's `.so`. x86 emulators (LDPlayer/NOX/MEmu) ARM-translate arm-only libs → native hooks are flaky (this is why Meta/Proxygen won't confirm there). Best: a **rooted ARM phone**. Best on Windows: **Android Studio AVD, `google_apis` (non-Play) x86_64 image** — rootable with `adb root` (uid=0, no `su`), far more stable than LDPlayer. (A `google_apis_playstore` image is **not** rootable.)
+- **QUIC / HTTP3 is invisible to this technique.** Modern Google apps (Play Store, GMS, Chrome) and many CDNs default to QUIC (UDP/443), which never calls `SSL_read`/`SSL_write`. Force them back to capturable TLS-over-TCP by blocking UDP/443 on the rooted device:
+  `adb shell iptables -A OUTPUT -p udp --dport 443 -j REJECT; adb shell ip6tables -A OUTPUT -p udp --dport 443 -j REJECT`
+- **Multi-process apps (Chrome/cronet).** Their network runs in a **zygote-forked** child process (`:sandboxed_process`/`:privileged_process`). Frida spawn-gating (`--follow`) does **not** catch zygote forks, so attaching to the main process captures nothing. Use `--attach-all` (it enumerates the already-forked children) or attach to the child by name/pid. Isolated (`isolated_app`) children may refuse attach entirely.
+- **Don't attach to system processes.** Attaching Frida to `zygote`/`system_server`/HALs (and enabling spawn-gating over them) kills `system_server` (`DeadSystemException`) and the emulator thrashes. `--attach-all` already skips non-app processes — keep it that way.
+- **Idle & account-gated targets.** A fresh AVD's stock Google apps are often idle or need a signed-in account, so they emit little. Point the harness at the **third-party app you actually care about** (OkHttp/Conscrypt apps over system `libssl` are the sweet spot and capture cleanly).
+- **Don't run the heavy scan on the app's own threads.** The `dlopen`/`android_dlopen_ext` hooks must **not** call `scan()`/`enumerateSymbols` synchronously in `onLeave` — that runs on whatever app thread called `dlopen`, and doing heavy work there corrupts fragile threads (verified: it SIGSEGV'd YouTube's `RenderThread` mid-`EglManager::createContext`, killing the app on inject and *looking* like anti-frida). `capture-http.js`/`ssl-unpin.js` now `setTimeout(scan, 50)` to defer onto Frida's JS thread. Related: for a heavy, GPU-accelerated app that crashes on early **spawn**, **attach *after* it has finished rendering** instead — early-spawn instrumentation races EGL init; attach-after-render is stable.
+
+### cronet / QUIC apps (official YouTube, Chrome, most Google apps) — this toolkit can't, use friTap
+
+These apps don't use system `libssl`/Conscrypt at all, so `capture-http.js`'s export scan finds nothing and `fridacap.py` returns 0 records even though it "attached". Confirmed on the official **YouTube** app (`com.google.android.youtube`): it ships its TLS inside **`libcronet.<version>.so`** where BoringSSL is **statically linked with stripped symbols** (no `SSL_read`/`SSL_write` exports to hook), and it defaults to **QUIC/HTTP3** (no `SSL_read`/`SSL_write` call at all). It also has an in-app guard ("Ssl_Guard") and a native crash handler. The fix is **byte-pattern hooking**, which is what friTap (`pip install friTap`) and BoringSecretHunter are built for:
+
+```bash
+# attach AFTER YouTube has fully rendered (don't spawn — EGL-init race crashes it)
+adb -s emulator-5584 shell am start -n com.google.android.youtube/com.google.android.apps.youtube.app.watchwhile.MainActivity
+fritap -m emulator-5584 -k keys.log -p yt.pcap <pid>     # pattern-hooks libcronet, removes Ssl_Guard, dumps TLS keys + plaintext pcap
+```
+
+Verified live: friTap auto-detected and removed `Ssl_Guard`, pattern-hooked `libcronet.125.0.6383.0.so` and the Google QUICHE QUIC stack, and extracted YouTube's live TLS secrets (`CLIENT/SERVER_TRAFFIC_SECRET_0`). Caveats on this setup: friTap **2.6.0 is not fully compatible with Frida 17** (it calls the removed `Session.enumerate_threads`, so hooking succeeds only intermittently — pin Frida 16 for reliability), and for a cronet version whose read/write byte-pattern doesn't match, you get the **keylog** but an empty plaintext pcap → capture encrypted packets separately (`tcpdump`) and decrypt in Wireshark with `keys.log`. **Shortcut:** the open-source **NewPipe** calls the *same* YouTube InnerTube API (`youtubei/v1/player`, `videoplayback`) with no cronet/anti-tamper, so this toolkit captures it cleanly — if you want YouTube's *API*, reverse NewPipe; reach for friTap only when you specifically need the *official app's* own traffic.
+
+#### Capturing a stripped-BoringSSL app with THIS toolkit (offsets via REA)
+
+When you need the official app's own traffic and don't want friTap's Frida-17 flakiness, `capture-http.js`/`fridacap.py` can now hook the stripped BoringSSL inside `libcronet`/`libflutter` directly — if you give them the function offsets. The only hard part is finding `SSL_read`/`SSL_write` in a symbol-stripped `.so` — and `scripts/find-ssl-offsets.py` auto-builds the JSON for you (REA is the fallback for the truly-stripped case). Workflow:
+
+1. **Force QUIC → TCP.** HTTP/3 plaintext never passes through `SSL_read`/`SSL_write` (it's `QuicSpdyStream::Readv`/`WriteOrBufferBody`), so hooking BoringSSL only yields the TCP path. Block UDP/443 on the rooted device so cronet falls back to TLS-over-TCP:
+   `adb shell iptables -A OUTPUT -p udp --dport 443 -j REJECT; adb shell ip6tables -A OUTPUT -p udp --dport 443 -j REJECT`
+2. **Pull the exact lib** off the device (the versioned name matters — it's the module key):
+   `adb shell "ls /data/app/*/com.target.pkg*/lib/arm64/ /data/data/com.target.pkg/**/ 2>/dev/null | grep -iE 'cronet|flutter'"` then `adb pull <path>/libcronet.<ver>.so`
+3. **Auto-build the offsets file** — the bundled tool reads the ELF's `.dynsym` **and** `.symtab` straight off disk (so it finds functions that look "stripped" to Frida because they're only in `.symtab`, not exported):
+   `python scripts/find-ssl-offsets.py libcronet.<ver>.so --module libcronet.<ver>.so --out offsets.json`
+   It prints the offsets and writes the JSON in the exact shape below. **Truly stripped** (no `.symtab` either)? Give it a prologue signature: `--pattern SSL_read=1F2003D5FD7BBFA9F44F01A9 --pattern SSL_write=FF8300D1FD7B01A9F44F02A9` (friTap arm64 sigs — it byte-scans the exec sections and reports the virtual offset). Last resort = **REA**: `open_binary`, `search_bytes` for the prologue / `search_procedures` + xref, confirm the function, read its offset from the image base.
+4. **(the script already wrote `offsets.json`)** — shape, keyed by the on-device module name:
+   ```json
+   { "libcronet.117.0.5938.0.so": {
+       "SSL_read":  { "addr": "0x4a1b20", "absolute": false },
+       "SSL_write": { "addr": "0x4a1e40", "absolute": false } } }
+   ```
+5. **Capture.** Attach *after* the app has rendered (early-spawn races EGL init), passing the offsets:
+   `python fridacap.py --device emulator-5584 --attach <pid> --offsets offsets.json --seconds 60 --out cap`
+   The attach line prints `stripped=[libcronet…|SSL_read,…]` when a hook lands. If `libcronet` loads late (its own `dlopen`), the poll/`dlopen` rescan picks it up — the offset re-resolves against the now-loaded base automatically.
+
+**No REA / quick-and-dirty:** skip step 3 and pass the prologue signature as `--patterns patterns.json` (`{ "libcronet.<ver>.so": { "SSL_read": "1F 20 03 D5 FD 7B BF A9 F4 4F 01 A9", "SSL_write": "FF 83 00 D1 FD 7B 01 A9 F4 4F 02 A9" } }`); the agent `Memory.scan`s the module's r-x ranges and hooks the first match. Patterns are **build- and arch-specific** and rot across versions — prefer offsets from REA for anything you'll reuse. (Pattern source: friTap's `default_patterns.json`, android/arm64.)
+
+### TikTok / Douyin (ByteDance) notes
+
+ByteDance apps ship their own TLS stack, so the sweet spots are app-private libs, not system `libssl`:
+- **`libttboringssl.so`** — Douyin/TikTok's BoringSSL fork; **`libsscronet.so`** — their cronet. `ssl-unpin.js`'s module-wide verify probe hooks `libttboringssl` by `custom_verify`/`cert_verify_callback` automatically (no name list needed). `libsscronet` is cronet → the Java-layer Cronet pin hooks fire, but plaintext capture still needs the cronet treatment: **block UDP/443 to drop QUIC→TCP**, then `capture-http.js` offsets-mode on the pulled `.so` (see cronet section above).
+- **Attach, don't early-spawn.** These apps are GPU-heavy and anti-tamper-laden; spawn-time instrumentation races init. Pair with `anti-detect.js` first — ByteDance ships aggressive Frida/root detection.
+- **Packed / plugin DEX.** Pinning/signing classes often live in a plugin or a packed (加固) DEX, invisible to a plain `Java.use`. If the Java hooks don't bind, the class isn't loaded in the default classloader yet — dump the real DEX (FRIDA-DEXDump/BlackDex) and enumerate extra classloaders; see china-re-arsenal.
+- **Unpin ≠ replay.** Getting plaintext is only step one — ByteDance signs every request (`X-Argus` / `X-Gorgon` / `X-Ladon` / `X-Khronos`) in native code. Reimplementing those is a separate reverse job (unidbg/Frida-RPC oracle) — see the SKILL's *Signing lives in a native .so* references.
+
+## Anti-Frida detection — detect the vector, then hide or patch
+
+When an app **exits, crashes, or silently does nothing the instant you attach**, it's usually detecting Frida, not a bug in these scripts. Work the way the symptom points: confirm the vector (the `anti-detect.js` open-logger + which check the string-filter trips tells you), then either hide it (`anti-detect.js`) or, for the stubborn ones, find the detector statically in REA and NOP/patch the check. The common Android vectors and how each shows up:
+
+| Vector | Exact indicator the app looks for | How it reads it | Counter |
+| --- | --- | --- | --- |
+| **Port scan** | `127.0.0.1:27042`, `:27043` (frida-server's D-Bus) | `connect()`/`bind()` to localhost | Run frida-server on a **non-default port + renamed binary**: `./fs1337 -l 127.0.0.1:1337`, client `frida -H 127.0.0.1:1337`. Kills port *and* process-name checks. |
+| **Process / fd** | `frida-server`, `frida-helper`, `frida-agent`, `magisk` | `/proc/<pid>/fd/*` targets, cmdline | Rename server; use **frida-gadget** (embedded, no server process/port); Magisk DenyList for the fd `magisk` string. |
+| **Thread names** | `gmain`, `gdbus`, `gum-js-loop`, `pool-frida` | `/proc/<pid>/task/<tid>/comm` | `anti-detect.js` string-filter (if read then `strstr`'d). Robust: patch the detector. |
+| **`/proc/self/maps`** | `frida-agent-64.so`, `frida-agent-32.so`, `gadget`, `gum-js` | `open`→`read`→`strstr` | `anti-detect.js` string-filter. Stronger: **IO redirection** — hook `open`/`openat`, serve a sanitized copy with the signatures stripped (the article's `mapsRedirect`). Gadget loaded from a renamed path also helps. |
+| **D-Bus / IPC** | `frida:rpc` string, handshake behaviour | memory string scan | `anti-detect.js` string-filter; non-default port. |
+| **ptrace** | self-`ptrace(PTRACE_TRACEME)` at init to take the trace slot | one-shot at startup | `anti-detect.js` ptrace-guard; or **spawn** (inject before init runs the guard) instead of attach. |
+| **Inline-hook / CRC** | first ~16 bytes of a fn changed; CRC over a code region ≠ expected | reads its own `.text` | Hooks *are* byte changes, so hiding is hard — **don't hook the watched fn**; use `Interceptor.replace` elsewhere, a hardware bp (Stalker), or NOP the CRC/compare routine itself. |
+| **Java hook** | key method moved to a native/altered state | ART introspection | Prefer native-layer hooks; or neutralize the Java detector method. |
+
+Notes: the string-filter is a blunt instrument — it also defeats `strstr`-based maps/fd/thread scans in one hook, but misses apps that scan with `strcmp`/`memcmp` or read `/proc` via **raw syscalls** (bypassing libc `open`, so the logger and any `open` hook see nothing — confirm the real path before trusting a hook). This is why the reliable endgame is static: locate the `abort`/`exit`/`kill`/`pthread_kill` caller chain in REA, walk back to the check that fired, and patch it. Detection list distilled from army2.net — Cơ chế phát hiện và đối phó Frida trên Android.
+
+### Hardened targets — when `anti-detect.js` isn't enough (the device-level stack)
+
+`anti-detect.js` is the quick in-process patch; a well-hardened app needs the problem split into **three orthogonal gates** — they fail for different reasons and need different fixes, so diagnose *which* one fired before reaching for a tool:
+
+1. **Root detection** (app sees Magisk/`su`/root and exits — happens *before* you even attach Frida). This is a *root-hiding* problem, not a Frida one. Enforce **Zygisk + a denylist**: Shamiko (per-app hide — turn OFF Magisk's own "enforce denylist" first; Shamiko uses its own blocklist) or Zygisk-Assistant (works on Magisk/KernelSU/APatch). Kernel-level hiding (**SusFS** + KernelSU/APatch) is the strongest but needs a patched kernel. None of these touch Frida detection.
+2. **Frida detection** (app runs fine rooted, but dies the moment you attach). The durable fix `anti-detect.js` only approximates is a **patched frida-server** that renames the detection artifacts *at the binary*, so there's nothing for the app to find. The canonical strongR-frida patch set renames exactly these 8 (captured here so the knowledge survives the repo — these are also precisely what a detector scans for, i.e. what `anti-detect.js` tries to hide at runtime):
+   - `frida:rpc` — the D-Bus RPC string
+   - the `re.frida.server` IO/service name
+   - the `linjector` named pipe
+   - the `frida-agent.so` agent library name
+   - the `frida_agent_main` exported symbol
+   - the `gum-js-loop` thread name
+   - the `gmain` thread name
+   - the "unexpected command" protocol reply (handshake probe)
+
+   Build it (strongR-frida-android / phantom-frida — weekly auto-builds, random names; Florida — older) or grab a release, then **run it on a non-default port + renamed binary** (`./<randomname> -l 127.0.0.1:1337`, connect with `frida -H 127.0.0.1:1337`). The patch files themselves live under `AAAA-Project/Patchs` + `hluwa/Patchs` (BoringSecretHunter-style, apply over frida-core). Combine with `anti-detect.js` for leftover in-process checks (`/proc` scans the binary rename doesn't cover). *Upstream (may move): github CrackerCat/strongR-frida-android, theqmaks/phantom-frida, Ylarod/Florida.*
+3. **Integrity attestation** (Play Integrity / hardware-backed). Orthogonal again — hiding root *and* Frida won't pass it, because the app's **server** is verifying a Google-signed token. Play Integrity Fix (PIF) can reach BASIC/DEVICE integrity on many setups; **STRONG (hardware-backed) integrity is generally not winnable client-side** — budget for a real attested device, or reverse the *server-side* check instead. (2026 consensus, Talsec: server-verified integrity beats any local patch.)
+
+**No root, or root itself is detected?** Go rootless: `objection patchapk --source app.apk` embeds frida-gadget into the APK (no root), or apk-mitm strips pinning by repackaging. Caveat: both **re-sign the APK → break signature/integrity checks** and can trip anti-tamper; multi-dex apps are harder (pre-built pinning hooks miss custom impls → add your own). *(folded in 2026-11 from current hardening-bypass research.)*
+
+## When the bypass fails — self-diagnose, research, update (keep this toolkit learning)
+
+This toolkit is a snapshot of techniques that worked; apps change. When `ssl-unpin.js` / `capture-http.js` don't deliver on a new target, **don't hand-hack one-off — run this loop and fold the fix back in**, so next time it's built-in (that's exactly how the TikTok/offsets/anti-detect sections got here).
+
+**1. Diagnose — which layer is blocking? Read the symptom, don't guess:**
+
+| Symptom | Likely cause | Confirm with |
+| --- | --- | --- |
+| App **crashes/exits** the instant you attach | anti-Frida detection | `anti-detect.js` open-logger (which `/proc` path) + logcat for the abort; `anti-detect.js` first, then re-try |
+| App runs, **but zero traffic** captured, and ssl-unpin printed **no `[+]` hooks** | pinning class not in the default classloader (packed/plugin DEX), or an unknown TLS lib | `Java.use` throws → packed → dump DEX (FRIDA-DEXDump) + enumerate classloaders; REA `search_android_classes --pattern Pinn\|Trust\|Ssl` |
+| ssl-unpin **does** print `[+]` hooks but still no plaintext | wrong TLS stack — cronet/QUIC or stripped BoringSSL | `capture-http.js` prints which modules it hooked; if none → cronet/Flutter → offsets-mode / block UDP/443 / friTap |
+| MITM shows a TLS handshake **fail** / `SSLHandshakeException` | native pin not covered by the current verify surface | REA on the app-private `.so`: `search_procedures` / `inspect_native_exports` for a verify/`X509`/`pin` symbol the script doesn't hook yet |
+
+Lead with REA to turn "it doesn't work" into a named function: `trace_android_references` back from the pinning class to see who enforces it; `list_strings`/`search_strings` the `.so` for `pin`/`verify`/`cert`; for a crash, trace the `abort`/`exit`/`pthread_kill` caller chain to the check that fired.
+
+**2. Research the specific gap** (don't re-derive — someone likely published it). Targeted queries, newest first: `"<app>" frida ssl bypass`, `"<lib>.so" unpin frida`, the exact class/symbol name you found in step 1. Good wells: codeshare.frida.re, GitHub (sort by recently-updated), the repos in the SKILL's reference list. For a stripped/static lib, the answer is usually an **offset or byte-pattern** (REA / BoringSecretHunter / friTap `default_patterns.json`), not a new symbol.
+
+**3. Implement against the real target + verify empirically.** Add the hook/offset/pattern, re-run, and require ground truth — real decrypted plaintext or a `200` with the expected JSON body, not just "hooked". A hook that binds but changes nothing is not a fix.
+
+**4. Update this toolkit** so the lesson sticks: fold the working hook into `ssl-unpin.js` (a new `VERIFY_SYMS` entry / Java step), the offset recipe into `offsets.example.json`, or a vector into `anti-detect.js` — and add a one-line note **here** with the date + source link. The bar: the *next* app of this kind should be covered without re-researching. (Meta/Proxygen, TikTok/libttboringssl, cronet/offsets, and the anti-Frida matrix all entered the toolkit through this exact loop.)
 
 These scripts are for lawful analysis (your own apps / authorized research / CTF). Comply with the law and software licenses.
