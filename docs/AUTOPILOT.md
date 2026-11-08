@@ -4,7 +4,7 @@ This is the **single decision graph** an agent follows top-to-bottom to reverse 
 
 The agent keeps one state file, **`rea-state.json`** (below), as its memory. The triage scripts emit `--json` fragments; merge each fragment's top-level key into `rea-state.json`. A resumed run reads the state file and jumps to the first unmet GATE — so a crash, a context reset, or "continue tomorrow" never loses place.
 
-> **Golden discipline:** advance only on a GATE, never on "looks done". Update `rea-state.json` after every step. When a STOP-IF fires, stop and report — don't burn cycles against a wall the model says is a wall (STRONG attestation, white-box key extraction).
+> **Golden discipline:** advance only on a GATE, never on "looks done". Update `rea-state.json` after every step. A **STOP-IF is not permission to quit** — it means run the **Persistence protocol** below (report the exact blocker, then exhaust research — EN *and* the Chinese RE scene — before reporting stuck). Only the short list of **genuine hard stops** (math/hardware walls) ends a run.
 
 ---
 
@@ -48,7 +48,7 @@ The agent keeps one state file, **`rea-state.json`** (below), as its memory. The
   - `cronet` / `boringssl-fork` → note it; Phase 2 will use offsets, not a proxy.
   - `plain` → standard MITM path in Phase 2.
 - **GATE** `state.fingerprint.route_tags` is non-empty.
-- **STOP-IF** jadx/REA shows the DEX is packed/加固 (classes missing/encrypted) → dump the real DEX first (FRIDA-DEXDump / Youpk; `docs/china-re-arsenal.md`), then re-run Phase 1. This step is semi-automatic — report what packer REA identifies.
+- **STOP-IF** jadx/REA shows the DEX is packed/加固 (classes missing/encrypted) → **Persistence protocol**: name the packer (梆梆/爱加密/娜迦/腾讯乐固/360/阿里), search `<packer> 脱壳` on kanxue/52pojie, dump the real DEX (FRIDA-DEXDump / Youpk / FART; `docs/china-re-arsenal.md`), then re-run Phase 1. Report the packer + what you tried — don't stop at "packed".
 
 ## Phase 2 — capture plaintext traffic
 
@@ -58,7 +58,7 @@ The agent keeps one state file, **`rea-state.json`** (below), as its memory. The
   - **cronet / boringssl-fork / flutter** → `python scripts/find-ssl-offsets.py <pulled .so> --json` (writes `offsets.json`, merges `state.offsets`) → `python frida/fridacap.py --device <id> --attach <pid> --offsets offsets.json`. Block UDP/443 first to force QUIC→TCP.
 - **READ** `offsets.found` (must contain SSL_read/SSL_write or their lowercase) before the cronet path can work.
 - **GATE** `state.capture.requests ≥ 1` for the real API host, with non-empty bodies. (Run Phase 3 to populate it.)
-- **STOP-IF** the app dies on attach even with `anti-detect.js` → escalate stealth: renamed frida-server on a non-default port, then **ZygiskFrida** (process-less, no ptrace), then KernelSU/APatch+SusFS (`frida/README.md` → anti-Frida). If it still won't attach, report the detection vector REA found — don't loop.
+- **STOP-IF** the app dies on attach even with `anti-detect.js` → **Persistence protocol**, don't give up: escalate stealth stepwise — renamed frida-server on a non-default port → **ZygiskFrida** (process-less, no ptrace) → KernelSU/APatch+SusFS (`frida/README.md` → anti-Frida); and research the specific vector (`过 frida 检测`, `<app> frida 检测 绕过` on kanxue/52pojie, find the abort caller in REA and NOP it). Try several named methods before reporting; then report each vector you hit and how you tried to beat it.
 
 ## Phase 3 — analyze the capture (the router)
 
@@ -103,13 +103,30 @@ The agent keeps one state file, **`rea-state.json`** (below), as its memory. The
 
 ---
 
-## Hard stop conditions (always surface, never loop)
+## Persistence protocol — report, then exhaust research before you stop
 
-1. **STRONG hardware attestation** required by the server (Play Integrity STRONG, TEE key) — not winnable off a certified device.
-2. **White-box key extraction** as the only route (oracle closed) — research-grade (DCA/DFA); confirm it's in scope before starting.
-3. **Packed DEX** you can't dump — report the packer, needs a dumping step.
-4. **Device/root unavailable**, or the app can't be attached after the full stealth escalation.
-5. Anything that looks like **real user data / credentials** outside the authorized target — stop and ask.
+Most STOP-IFs are **soft blocks**: the app kills the Frida attach, offsets aren't found, the signer `.so` is obfuscated, the packer is unknown. **These are not walls — they are solved problems someone has already written up.** When one fires, do NOT stop. Run this loop, out loud (keep reporting so the human sees persistence, not silence):
+
+1. **Report the exact blocker** — the precise symptom + the string/error/evidence (the abort caller REA shows, the detection string in `/proc`, the missing symbol, the packer name). A vague "it's protected" is not a report.
+2. **Name it.** Identify the exact mechanism: which packer/壳 (梆梆/爱加密/娜迦/腾讯乐固/360加固/阿里聚安全/VMP), which anti-Frida vector, which signer family (`hard-sign-types.md`). You can't research what you can't name.
+3. **Research it — EN *and* the Chinese RE scene (this is where the hard answers live).** The Chinese reverse community has solved almost every Android hardening/anti-Frida/native-signer problem first and documented it. Search, in this order:
+   - the exact name + the Chinese technique verb: `<packer名> 脱壳`, `<app> frida 检测 绕过` / `过 frida 检测`, `<lib> unidbg 补环境`, `x-gorgon/x-argus unidbg 签名`, `<壳> 抽取 还原`.
+   - the sources: **看雪 `bbs.kanxue.com`**, **吾爱破解 `52pojie.cn`**, CSDN, 先知社区, github CN forks (often the only working unidbg env-patch / unpacker). `docs/china-re-arsenal.md` is the local index of these tools; `docs/reverse-case-studies.md` has worked native-signer cases.
+   - EN sources for the same: hexrays/frida codeshare, the `frida/README.md` anti-Frida matrix, the SideChannelMarvels/unidbg docs.
+4. **Apply the found technique** (new hook, renamed/patched frida-server, ZygiskFrida, a dumping step, an unidbg 补环境 stub, a byte-pattern for the offset).
+5. **Verify** against the phase GATE. Still blocked → go back to (2) with a *more specific* name; try the next method. Budget several distinct approaches before escalating — a single failed attempt is not "exhausted".
+6. **Fold the win back in** (self-update): a working hook → `ssl-unpin.js`/`anti-detect.js`; a working offset/pattern → the `find-ssl-offsets` recipe; a new case → `hard-sign-types.md` / `reverse-case-studies.md`, with a dated source note. The next app of this kind is then handled built-in. (Full discipline: `frida/README.md` → "When the bypass fails".)
+
+Only after several named, researched, applied-and-failed attempts do you report **stuck** — and then you report *what you tried and why each failed*, not just "blocked".
+
+## Genuine hard stops (these actually end a run — surface and stop)
+
+1. **STRONG hardware attestation** required by the server (Play Integrity STRONG, TEE-bound key) — not winnable off a certified device; it's the security model, not a missing trick.
+2. **White-box key extraction** as the *only* route, with the oracle genuinely closed — research-grade (DCA/DFA); confirm it's in scope before sinking days.
+3. **Device/root unavailable**, or a real capability you can't provide (test account, OTP, captcha key, a physical attested device).
+4. Anything touching **real user data / credentials outside the authorized target** — stop and ask, always.
+
+Everything else is a soft block → the Persistence protocol, not a stop.
 
 ## The loop invariant
 
