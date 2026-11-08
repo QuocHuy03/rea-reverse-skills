@@ -23,6 +23,10 @@ Report progress briefly as you hit each major milestone: traffic captured → si
 
 Capturing traffic is only to **understand the protocol**. The deliverable is **1 Python CLI** that builds requests itself, running headless and stable (capture -> solve -> CLI passes = done). No DB, no web UI. If the signing algorithm lives in a native `.so` you can't reverse → fall back to **Frida RPC**: keep one instance of the app running and expose the signing function over `frida` RPC for the CLI to call — clearly note this is a fallback.
 
+## Run it autonomously — follow `docs/AUTOPILOT.md`
+
+For an end-to-end run, **`docs/AUTOPILOT.md` is the single decision graph**: phases 0→6, each with an exact command, the JSON field to branch on, a pass/fail GATE (advance only when met), and STOP-IF conditions (when to surface to a human instead of looping). Keep one state file **`rea-state.json`** as working memory — the triage scripts emit `--json` fragments (`fingerprint.py --json`, `analyze-capture.py --json`, `find-ssl-offsets.py --json`) whose top-level key you merge into it. To resume after any interruption, read `rea-state.json` and continue at the first unmet GATE. The sections below are the reference material those phases point into.
+
 ## Environment (fill in per your machine — keep as variables)
 
 ```bash

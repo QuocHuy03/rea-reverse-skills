@@ -52,6 +52,7 @@ def main():
     ap = argparse.ArgumentParser(description="Summarize fridacap requests.ndjson into a reverse map.")
     ap.add_argument("ndjson", help="path to requests.ndjson")
     ap.add_argument("--host", help="only this host (substring)")
+    ap.add_argument("--json", action="store_true", help="emit a machine-readable rea-state.json 'capture' fragment (for AUTOPILOT)")
     args = ap.parse_args()
     try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except Exception: pass
@@ -91,6 +92,31 @@ def main():
                         secrets[k.lower()].add(v[:24] + ("…" if len(v) > 24 else ""))
             if looks_encrypted(r.get("body")):
                 enc_endpoints[(r.get("method", "?"), host, path)] += 1
+
+    if args.json:
+        top_ep = endpoints.most_common(1)
+        nxt = None
+        if sig_hdrs:
+            ep = ("%s %s%s" % top_ep[0][0]) if top_ep else "a signed endpoint"
+            nxt = ("signer present (headers: %s) -> run `frida -U -f <pkg> -l frida/signer-sniffer.js --no-pause`, "
+                   "trigger %s, classify the family via docs/hard-sign-types.md ('classify in 60s'); "
+                   "reimplement signer.py -> python scripts/verify-signer.py <ndjson> --signer signer.py (must PASS)"
+                   % (", ".join(sorted(sig_hdrs)), ep))
+        elif enc_endpoints:
+            nxt = "no sign headers but bodies look encrypted -> crypto-dump.js then docs/decryption-playbook.md"
+        else:
+            nxt = "no signing/encryption detected -> endpoints are likely callable directly; build client.py"
+        frag = {"capture": {
+            "ndjson": args.ndjson, "requests": n_req,
+            "hosts": [h for h, _ in hosts.most_common()],
+            "endpoints": [[m, h, p, c] for (m, h, p), c in endpoints.most_common(60)],
+            "signer_headers": [k for k, _ in sig_hdrs.most_common()],
+            "secrets": {k: sorted(v) for k, v in secrets.items()},
+            "encrypted_endpoints": [[m, h, p, c] for (m, h, p), c in enc_endpoints.most_common(40)],
+            "recommended_next": nxt,
+        }}
+        print(json.dumps(frag, indent=2))
+        return 0
 
     out = sys.stdout
     bar = "=" * 70

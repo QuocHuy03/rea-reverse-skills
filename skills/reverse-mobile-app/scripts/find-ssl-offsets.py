@@ -108,6 +108,7 @@ def main():
     ap.add_argument("--out", help="write JSON here (default: stdout)")
     ap.add_argument("--pattern", action="append", default=[],
                     help="SYM=HEX byte-signature fallback for a stripped symbol (repeatable)")
+    ap.add_argument("--json", action="store_true", help="emit a machine-readable rea-state.json 'offsets' fragment (for AUTOPILOT)")
     args = ap.parse_args()
 
     try:
@@ -158,12 +159,23 @@ def main():
 
     obj = {module: {s: {"addr": "0x%x" % found[s], "absolute": False} for s in found}}
     text = json.dumps(obj, indent=2)
-    if args.out:
-        with open(args.out, "w", encoding="utf-8") as f:
+    out_path = (args.out or "offsets.json") if args.json else args.out
+    if out_path and found:
+        with open(out_path, "w", encoding="utf-8") as f:
             f.write(text + "\n")
-        print("wrote %s" % args.out, file=sys.stderr)
-        print("  use: python fridacap.py --device <id> --attach <pid> --offsets %s" % args.out, file=sys.stderr)
-    else:
+        print("wrote %s" % out_path, file=sys.stderr)
+        print("  use: python fridacap.py --device <id> --attach <pid> --offsets %s" % out_path, file=sys.stderr)
+    if args.json:
+        missing = [s for s in want if s not in found]
+        nxt = ("python fridacap.py --device <id> --attach <pid> --offsets %s" % (out_path or "offsets.json")) if found else \
+              ("still stripped -> get SSL_read/SSL_write offsets from REA (inspect_native_exports / disasm) or pass --pattern %s=<hex>" % (missing[0] if missing else "SYM"))
+        print(json.dumps({"offsets": {
+            "module": module, "arch": elf.machine, "bits": 64 if elf.is64 else 32,
+            "found": {s: "0x%x" % found[s] for s in found}, "how": how,
+            "missing": missing, "out": out_path, "recommended_next": nxt,
+        }}, indent=2))
+        return 0 if found else 1
+    if not args.out:
         print(text)
     return 0
 

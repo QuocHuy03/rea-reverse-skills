@@ -13,7 +13,7 @@ Cross-platform (pure stdlib, runs on the Windows box too — no bash/.ps1 split)
 Idea borrowed + extended from SimoneAvogadro/android-reverse-engineering-skill
 (fingerprint.sh); here it also classifies the TLS stack → the capture route.
 """
-import sys, re, zipfile, argparse, io
+import sys, re, zipfile, argparse, io, json
 
 # filename markers (checked against the zip's entry names)
 FILE_MARKERS = {
@@ -72,6 +72,7 @@ def main():
     except Exception: pass
     ap = argparse.ArgumentParser(description="Fingerprint an Android APK -> framework, TLS stack, SDKs, obfuscation, capture route.")
     ap.add_argument("apk", help="path to .apk / .xapk / .apks")
+    ap.add_argument("--json", action="store_true", help="emit a machine-readable rea-state.json 'fingerprint' fragment (for AUTOPILOT)")
     args = ap.parse_args()
 
     try:
@@ -97,6 +98,32 @@ def main():
         n = len(set(top))
         if n > 150:  obf_level, obf_note = "HIGH", "%d distinct short (<=2-char) top packages - heavily R8-obfuscated" % n
         elif n > 40: obf_level, obf_note = "MODERATE", "%d distinct short top packages - partly obfuscated" % n
+
+    # --- machine-branchable route tags + the single next command (used by AUTOPILOT) ---
+    tags, nxt = [], None
+    if "Flutter" in frameworks:
+        tags.append("flutter"); nxt = "decompile with blutter/reFlutter; python scripts/find-ssl-offsets.py <libflutter.so> --symbols ssl_read,ssl_write --out offsets.json ; then fridacap.py --offsets"
+    if "React Native" in frameworks:
+        tags.append("react-native"); nxt = nxt or "read assets/index.android.bundle (Hermes -> hermes-dec/hbctool); logic is JS, not smali"
+    if "Xamarin/.NET" in frameworks:
+        tags.append("xamarin"); nxt = nxt or "decompile assemblies/*.dll with ILSpy/dotPeek"
+    if "Unity" in frameworks:
+        tags.append("unity"); nxt = nxt or "Il2CppDumper on libil2cpp.so + global-metadata.dat"
+    if any("cronet" in t for t in tls):
+        tags.append("cronet"); nxt = nxt or "block UDP/443; python scripts/find-ssl-offsets.py <libcronet/libsscronet.so> --out offsets.json ; then fridacap.py --offsets offsets.json"
+    if "BoringSSL fork (libttboringssl)" in tls:
+        tags.append("boringssl-fork"); nxt = nxt or "anti-detect.js FIRST; ssl-unpin.js auto-hooks libttboringssl; signer is native (X-Argus/Gorgon) -> hard-sign-types.md type A"
+    if obf_level in ("HIGH", "MODERATE") and not frameworks:
+        tags.append("obf-kotlin"); nxt = nxt or "python scripts/recover-kotlin-names.py <decompiled_src> BEFORE hunting the signer"
+    if not tags:
+        tags.append("plain"); nxt = "MITM + system CA (setup-device.py --ca); if pinned: ssl-unpin.js; fallback capture-http.js"
+
+    if args.json:
+        print(json.dumps({"fingerprint": {
+            "apk": args.apk, "framework": frameworks, "tls_stack": tls, "networking": net,
+            "sdks": sdks, "obfuscation": obf_level, "route_tags": tags, "recommended_next": nxt,
+        }}, indent=2))
+        return 0
 
     print("=" * 64)
     print("APK fingerprint:", args.apk)
