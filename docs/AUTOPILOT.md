@@ -103,12 +103,25 @@ The agent keeps one state file, **`rea-state.json`** (below), as its memory. The
 
 ---
 
+## Web targets — the parallel ladder (same discipline, web tools)
+
+For a **web app / site** instead of an APK, the phase order, `rea-state.json`, GATE/STOP-IF discipline and the Persistence protocol are identical; only the tools change. Map the phases:
+
+- **W0 preflight** — `curl_cffi` available; a browser you can drive via CDP for bundle reads (REA `list_browser_targets`/`analyze_web_bundle`). **GATE** you can reach the target from your own authorized session.
+- **W1 capture + triage** — capture a HAR from your own browser session (DevTools → Save all as HAR). `python scripts/har-analyze.py cap.har --json` (traffic map) + `python scripts/fingerprint-site.py cap.har --json` (stack + vendor) → merge into `state`. **READ** `recommended_route`, `anti_bot_vendors`, `signer_params`.
+- **W2 anti-bot** — **READ** `anti_bot_vendors` → `docs/web-anti-bot-ladder.md` for the vendor's exact move (reproduce your session's cookie/token + browser-identical TLS via `curl_cffi impersonate`, or run the vendor's JS as an oracle). **GATE** the API returns 200 from your client. **STOP-IF** the only path is defeating a protection on a target you have no right to → stop (see scope note).
+- **W3 signer** — **READ** `signer_params` → find the signer in the JS bundle (REA `export_web_scripts` → `recover_javascript_sources`, or `web/sign-sniffer.js` in your console) → reimplement in Python. **GATE** byte-for-byte match (same verify discipline as mobile).
+- **W4 crypto** — encrypted bodies → find the CryptoJS/WebCrypto call in the bundle → port to `pycryptodome`. **GATE** decrypt → valid JSON.
+- **W5 build** — `client.py` (`curl_cffi impersonate`, reuse the session) → a real call returns the expected data; `deliverable.verified = true`.
+
+**Scope note (web):** only ever reproduce access **you are authorized to have** (your own account/session, your own site, or an explicitly permitted target). Bulk-circumventing a third party's bot wall or content protection to scrape/download material you have no right to is out of scope — that's a hard stop, not a Persistence-protocol block.
+
 ## Persistence protocol — report, then exhaust research before you stop
 
 Most STOP-IFs are **soft blocks**: the app kills the Frida attach, offsets aren't found, the signer `.so` is obfuscated, the packer is unknown. **These are not walls — they are solved problems someone has already written up.** When one fires, do NOT stop. Run this loop, out loud (keep reporting so the human sees persistence, not silence):
 
 1. **Report the exact blocker** — the precise symptom + the string/error/evidence (the abort caller REA shows, the detection string in `/proc`, the missing symbol, the packer name). A vague "it's protected" is not a report.
-2. **Name it.** Identify the exact mechanism: which packer/壳 (梆梆/爱加密/娜迦/腾讯乐固/360加固/阿里聚安全/VMP), which anti-Frida vector, which signer family (`hard-sign-types.md`). You can't research what you can't name.
+2. **Name it.** Identify the exact mechanism: which packer/壳 (梆梆/爱加密/娜迦/腾讯乐固/360加固/阿里聚安全/VMP), which anti-Frida vector, which signer family (`hard-sign-types.md`), or — for web — which anti-bot vendor (`web-anti-bot-ladder.md`: Akamai/DataDome/PX/Kasada/jsvmp) and its token. You can't research what you can't name.
 3. **Research it — EN *and* the Chinese RE scene (this is where the hard answers live).** The Chinese reverse community has solved almost every Android hardening/anti-Frida/native-signer problem first and documented it. Search, in this order:
    - the exact name + the Chinese technique verb: `<packer名> 脱壳`, `<app> frida 检测 绕过` / `过 frida 检测`, `<lib> unidbg 补环境`, `x-gorgon/x-argus unidbg 签名`, `<壳> 抽取 还原`.
    - the sources: **看雪 `bbs.kanxue.com`**, **吾爱破解 `52pojie.cn`**, CSDN, 先知社区, github CN forks (often the only working unidbg env-patch / unpacker). `docs/china-re-arsenal.md` is the local index of these tools; `docs/reverse-case-studies.md` has worked native-signer cases.

@@ -42,7 +42,9 @@ rea capture-browser-scenario ...                   # run a controlled browser sc
 ```
 Identify: the API base URL, the endpoints, request/response fields, **which header is the signature** (`x-sign`, `authorization`, `x-nonce`, `x-ts`, `x-device`…), whether the body is encrypted.
 
-**Bundled triage — run this on the HAR first:** `python scripts/har-analyze.py capture.har` (add `--json` for a machine-readable fragment) turns the HAR into a reverse map: hosts + API endpoints, signature params/headers, **which anti-bot vendor is in play** (Cloudflare/Akamai/DataDome/PerimeterX/Kasada/Imperva/jsvmp — from cookies+headers), likely-encrypted bodies, and the recommended next step. Pure stdlib, reads your own saved HAR only.
+**Bundled triage — run these on the HAR first:** `python scripts/har-analyze.py capture.har` (traffic map: hosts + API endpoints, signature params/headers, **which anti-bot vendor is in play**, likely-encrypted bodies, next step) and `python scripts/fingerprint-site.py capture.har` (stack: framework/bundler, server/CDN, vendor, recommended route). Both take `--json` for a machine-readable fragment. Pure stdlib, read your own saved HAR only.
+
+**Autonomous run:** the end-to-end web ladder (phases W0→W5, with GATEs, STOP-IFs, the `rea-state.json` memory, and the Persistence protocol) is in `docs/AUTOPILOT.md` → "Web targets". Same discipline as the mobile skill; only the tools differ.
 
 ### 2. Read the JS bundle to find the signing/encryption formula — THE HEART
 ```bash
@@ -52,6 +54,7 @@ rea trace-web-module-imports / trace-web-source-location ...   # follow imports 
 ```
 - Grep the bundle for the header/field names you saw in traffic: `sign`, `signature`, `nonce`, `timestamp`/`ts`, `appId`, `secret`, `token`, `encrypt`, `CryptoJS`, `md5`, `hmac`, `AES`.
 - Follow the function that produces them. Minified bundle → use the reconstructed source + `trace-web-source-location`. The field order when signing is usually fixed/alphabetical.
+- **See the signed string, don't guess it:** paste `web/sign-sniffer.js` into the DevTools Console (your own session) and trigger one signed request → it hooks CryptoJS + WebCrypto and prints the **canonical string** (pre-hash bytes, in order) + key + a stack trace to the signer. The web analogue of the mobile `signer-sniffer.js`. If nothing prints, the signer is in a Web Worker/WASM → read the bundle with REA instead.
 - **Key/secret**: a constant in the JS, or assembled from a cookie/login response, or generated client-side. Web encryption often uses `CryptoJS` (AES-CBC/ECB + key/IV) — port it to `pycryptodome`.
 - **ALWAYS verify empirically**: reimplement the signing function in Python, compute the sign for a captured request → it must MATCH the value the site sent exactly, only then call for real.
 
