@@ -46,6 +46,8 @@ Identify: the API base URL, the endpoints, request/response fields, **which head
 
 **Autonomous run:** the end-to-end web ladder (phases W0→W5, with GATEs, STOP-IFs, the `rea-state.json` memory, and the Persistence protocol) is in `docs/AUTOPILOT.md` → "Web targets". Same discipline as the mobile skill; only the tools differ.
 
+**Runnable reference:** `examples/signed-api-demo/` is a local, authorized-by-construction target (HMAC signing + AES-encrypted body) plus its reversed client — `python examples/signed-api-demo/run_demo.py` proves the deliverable pattern end-to-end (signer matches byte-for-byte, client signs→calls→decrypts real data) and serves as a smoke test for the signer/crypto approach.
+
 ### 2. Read the JS bundle to find the signing/encryption formula — THE HEART
 ```bash
 rea export-web-scripts <url|capture> <outdir>      # export scripts for static analysis
